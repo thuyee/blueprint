@@ -142,10 +142,10 @@ fields:
 sequence:
   # 1. init
   - variables:
-      ai_task_entity: !input ai_task_entity
-      default_camera: !input default_camera
-      available_cameras: !input available_cameras
-      system_prompt: !input system_prompt
+      ai_task_entity: input ai_task_entity
+      default_camera: input default_camera
+      available_cameras: input available_cameras
+      system_prompt: input system_prompt
       user_question: "{{ instructions | default('') | trim }}"
       camera_entity_raw: "{{ camera_entity | default('') | trim }}"
 
@@ -347,3 +347,4 @@ sequence:
         data: "{{ ai_result.data }}"
   - stop: ""
     response_variable: response
+
