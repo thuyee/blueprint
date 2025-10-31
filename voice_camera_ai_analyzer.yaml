@@ -1,13 +1,23 @@
 blueprint:
   name: Voice - Smart Camera AI Analyzer
   author: luuquangvu_benbap
-  description: |
-    Smart AI-powered camera analysis script (single/multi, fixed invalid camera)
+  description: 'Smart AI-powered camera analysis script
 
+    - Tự hiểu hỏi 1 cam hay nhiều cam
+
+    - Tự map tên tự nhiên (“phòng khách”, “ban công”, “cửa”) sang entity thật
+
+    - Nếu user nói sai tên cam → dùng default, KHÔNG quét hết
+
+    - Trả lời tiếng Việt, prompt tiếng Anh
+
+    - Hỗ trợ structure (overview, cameras_with_people, cameras_no_people, cameras_error,
+    summary)
+
+    '
   domain: script
   homeassistant:
     min_version: 2025.8.0
-
   input:
     ai_task_settings:
       name: AI Task Settings
@@ -16,12 +26,14 @@ blueprint:
       input:
         ai_task_entity:
           name: AI Task Entity
+          description: Leave empty to use system default AI Task
           selector:
             entity:
               filter:
-                - domain:
-                    - ai_task
+              - domain:
+                - ai_task
               multiple: false
+              reorder: false
           default:
     camera_settings:
       name: Camera Settings
@@ -30,321 +42,234 @@ blueprint:
       input:
         default_camera:
           name: Default Camera
+          description: Dùng khi user nói sai tên hoặc không nói
           selector:
             entity:
               filter:
-                - domain:
-                    - camera
+              - domain:
+                - camera
               multiple: false
+              reorder: false
+          default: camera.my_home_pk2
         available_cameras:
           name: Available Cameras List
+          description: Danh sách camera để phân tích nhiều camera
           selector:
             entity:
               domain:
-                - camera
+              - camera
               multiple: true
-          default: []
+              reorder: false
+          default:
+          - camera.my_home_bc
+          - camera.my_home_pk2
+          - camera.my_home_pk1
     prompt_settings:
       name: Prompt Settings
       icon: mdi:robot
       collapsed: true
       input:
-        system_prompt: |
-          You are an AI assistant for a Home Assistant smart home system. You analyze live camera streams.
-        
-          IMPORTANT CONTEXT:
-          - You are called from a script that may send you ONE camera or MULTIPLE cameras.
-          - Each camera is sent to you via "attachments" (media-source://camera/...), so you MUST base your answer on the actual media you receive.
-          - You MUST NOT invent cameras that are not sent to you.
-          - You MUST answer IN VIETNAMESE with proper diacritics.
-        
-          AVAILABLE CAMERAS (from the system):
-          {camera_list}
-        
-          USER QUESTION:
-          "{user_question}"
-        
-          MODES:
-          1. SINGLE-CAMERA MODE (most common):
-             - Use this when the user asks about ONE place, ONE camera, or ONE situation.
-             - Examples (single):
-               - "Kiểm tra cam phòng khách có người không"
-               - "Ban công có mèo không"
-               - "Cửa trước có ai đứng không"
-               - "Trời bên ngoài mưa không"
-             - In this mode you ONLY describe what is visible in the camera that was sent to you.
-             - If the image/video is dark, blurred, blocked, or offline, tell the user clearly.
-             - Keep the answer short, clear, to the point, suitable for TTS/notification.
-        
-          2. MULTI-CAMERA MODE (only when user clearly asks for many cameras):
-             - Use this ONLY when the user asks things like:
-               - "Camera nào có người"
-               - "Kiểm tra tất cả camera"
-               - "Những camera nào đang offline"
-               - "Which cameras detect people?"
-             - In this mode, the script will send MULTIPLE camera attachments.
-             - You MUST produce a structured result with these fields:
-               * overview: summary of all cameras
-               * cameras_with_people: names of cameras where you SEE at least 1 person
-               * cameras_no_people: names of cameras where you do NOT see a person
-               * cameras_error: cameras that are dark/blocked/offline or cannot be seen
-               * summary: ONE short sentence in Vietnamese to speak out
-             - Keep lists short and human-readable (separated by comma).
-        
-          DETECTION RULES:
-          - "Có người" = any visible person, adult or child.
-          - If you see PETS (cat/dog), mention them.
-          - If the user asked about "mèo", "chó", or "pet", prioritize detecting those even if no people.
-          - If the user asked about "có người không" but the frame is empty, say clearly: "Không thấy người trong khung hình."
-          - Do NOT describe fixed objects (tường, nhà, bàn, ghế) unless they help to locate the person/pet.
-          - If outdoor part is visible, you may say simple weather status: "trời sáng/tối/âm u" only if it can be SEEN.
-        
-          OUTPUT FORMAT RULES:
-          - If the tool call defines a `structure`, you MUST fill ALL required fields of that structure.
-          - Do NOT output Markdown, do NOT output code blocks.
-          - Do NOT make up cameras. Only mention cameras that were sent to you.
-          - Language: VIETNAMESE.
-          - Tone: short, clear, no emoji (the notification system may add emoji later).
-        
-          EDGE CASES:
-          - If the image is too dark/blurred: say "Khung hình tối/không rõ, không thể khẳng định có người."
-          - If the camera is offline: put it into `cameras_error`.
-          - If the user asks about ONE camera but you see NO person: answer clearly: "Không thấy người trong khung hình của <camera_name>."
-        
-          SUMMARY RULE:
-          - The `summary` field MUST be a single sentence in Vietnamese, <= 120 characters, easy for TTS.
-          - Example: "Không phát hiện người ở phòng khách, ban công bình thường."
-
-
+        system_prompt:
+          name: System Prompt (English)
+          description: Main instructions for the LLM
+          selector:
+            text:
+              multiline: true
+              multiple: false
+          default: "You are an AI assistant for a Home Assistant smart home system.
+            You analyze live camera streams.\n\nIMPORTANT CONTEXT:\n- The user may
+            ask you to:\n  * Detect people, pets, or motion\n  * Check if the camera
+            is online/offline\n  * Describe what is seen in the image (objects, people,
+            pets, background)\n- You are called from a script that may send you ONE
+            or MULTIPLE cameras.\n- You MUST base your answer ONLY on the attached
+            media.\n- You MUST answer IN VIETNAMESE with proper diacritics.\n\nUSER
+            QUESTION:\n\"{user_question}\"\n\nAVAILABLE CAMERAS:\n{camera_list}\n\n###
+            MODES\n1. DESCRIBE MODE (when user says “có những gì”, “thấy gì”, “bên
+            trong có gì”)\n   - Describe EVERYTHING visible in the frame: people,
+            pets (cat/dog), vehicles, objects, doors, background, lighting.\n   -
+            Do NOT limit to people.\n   - Output should be short, clear, natural Vietnamese.\n2.
+            DETECTION MODE (when user says “có người không”, “có mèo không”, “có ai
+            không”)\n   - Focus on target the user asked (person/pet).\n   - If not
+            seen → say clearly “Không thấy …”.\n   - Keep it short for TTS.\n3. MULTI-CAMERA
+            MODE (when user says “camera nào”, “tất cả camera”, “kiểm tra tất cả”)\n
+            \  - You will receive MULTIPLE camera attachments.\n   - You MUST return
+            structured data:\n     * overview: short description of all cameras\n
+            \    * cameras_with_people: cameras where you SEE people\n     * cameras_no_people:
+            cameras where you see NO people\n     * cameras_error: cameras dark/blocked/offline\n
+            \    * summary: ONE Vietnamese sentence ≤ 120 chars for TTS\nDETECTION
+            RULES:\n- “Có người” = any visible human.\n- If user asked about pets,
+            prioritize cats/dogs over people.\n- If the frame is too dark/blurred
+            → say so, do not guess.\n- Do NOT describe fixed walls/furniture unless
+            needed for location.\nOUTPUT RULES:\n- Always in Vietnamese.\n- If structure
+            is provided, fill ALL required fields.\n- No Markdown, no code blocks.\n-
+            Do NOT invent unseen cameras or content.\nSUMMARY FIELD:\n- One short
+            Vietnamese sentence\n"
+  source_url: https://raw.githubusercontent.com/TriTue2011/Blueprint/main/voice_camera_ai_analyzer.yaml
 mode: parallel
 max_exceeded: silent
-
 variables:
-  version: 20251030_final_fix
-
+  version: 20251030_final_fixed_with_selector_dict
 fields:
   instructions:
     name: Camera Question
+    description: Hỏi bất kỳ về camera (1 cam hoặc nhiều cam)
     selector:
       text:
         multiline: true
     required: true
   camera_entity:
     name: Specific Camera (Optional)
+    description: Chọn camera cụ thể, nếu bỏ trống sẽ đoán theo câu hỏi
     selector:
       entity:
         filter:
-          - domain:
-              - camera
+        - domain:
+          - camera
         multiple: false
     required: false
-
 sequence:
-  # 1. init
-  - variables:
-      ai_task_entity: input ai_task_entity
-      default_camera: input default_camera
-      available_cameras: input available_cameras
-      system_prompt: input system_prompt
-      user_question: "{{ instructions | default('') | trim }}"
-      camera_entity_raw: "{{ camera_entity | default('') | trim }}"
-
-  # 2. validate question
-  - if:
-      - condition: template
-        value_template: "{{ not user_question }}"
-    then:
-      - variables:
-          response:
-            error: "Please provide a question about cameras."
-      - stop: "Missing question"
-        response_variable: response
-
-  # 3. validate available cameras
-  - if:
-      - condition: template
-        value_template: "{{ available_cameras | length == 0 }}"
-    then:
-      - variables:
-          response:
-            error: "No cameras configured in blueprint settings."
-      - stop: "No cameras available"
-        response_variable: response
-
-  # 4. build camera list for prompt
-  - variables:
-      camera_list_text: >
-        {% set ns = namespace(list=[]) %}
-        {% for cam in available_cameras %}
-          {% if states[cam] %}
-            {% set name = state_attr(cam, 'friendly_name') or cam %}
-            {% set ns.list = ns.list + ['- ' ~ name ~ ' (' ~ cam ~ ')'] %}
-          {% endif %}
-        {% endfor %}
-        {{ ns.list | join('\n') }}
-
-  # 5. decide final camera (this is the REAL fix)
-  - variables:
-      user_camera_valid: "{{ camera_entity_raw != '' and camera_entity_raw in states }}"
-      default_camera_valid: "{{ default_camera != '' and default_camera in states }}"
-      final_single_camera: >
-        {% if user_camera_valid %}
-          {{ camera_entity_raw }}
-        {% elif default_camera_valid %}
-          {{ default_camera }}
-        {% else %}
-          {{ (available_cameras | select('in', states) | list)[0] }}
-        {% endif %}
-      # we only treat it as "single" if user gave a valid camera
-      use_single_camera: "{{ user_camera_valid }}"
-
-  # 6a. single attachment (always built from final_single_camera)
-  - variables:
-      single_attachment: >
-        {
-          "media_content_id": "media-source://camera/{{ final_single_camera }}",
-          "media_content_type": "application/vnd.apple.mpegurl",
-          "metadata": {
-            "title": "{{ state_attr(final_single_camera, 'friendly_name') or final_single_camera }}",
-            "thumbnail": "/api/camera_proxy/{{ final_single_camera }}",
-            "media_class": "video",
-            "children_media_class": null,
-            "navigateIds": [
-              {},
-              {
-                "media_content_type": "app",
-                "media_content_id": "media-source://camera"
-              }
-            ]
-          }
-        }
-
-  # 6b. multi attachments
-  - variables:
-      all_attachments: >
-        {% set ns = namespace(items=[]) %}
-        {% for cam in available_cameras %}
-          {% if states[cam] %}
-            {% set name = state_attr(cam, 'friendly_name') or cam %}
-            {% set item = {
-              'media_content_id': 'media-source://camera/' ~ cam,
-              'media_content_type': 'application/vnd.apple.mpegurl',
-              'metadata': {
-                'title': name,
-                'thumbnail': '/api/camera_proxy/' ~ cam,
-                'media_class': 'video',
-                'children_media_class': None,
-                'navigateIds': [
-                  {},
-                  {'media_content_type': 'app', 'media_content_id': 'media-source://camera'}
-                ]
-              }
-            } %}
-            {% set ns.items = ns.items + [item] %}
-          {% endif %}
-        {% endfor %}
-        {{ ns.items }}
-      camera_count: "{{ available_cameras | select('in', states) | list | length }}"
-
-  # 7. final prompt
-  - variables:
-      final_prompt: >
-        {{ system_prompt
-           | replace('{camera_list}', camera_list_text)
-           | replace('{user_question}', user_question) }}
-
-  # 8. call ai_task
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ not ai_task_entity }}"
-        sequence:
-          - action: ai_task.generate_data
-            data:
-              task_name: "Smart Camera Analysis"
-              instructions: "{{ final_prompt }}"
-              attachments: >
-                {% if use_single_camera %}
-                  {{ [single_attachment | from_json] }}
-                {% else %}
-                  {{ all_attachments }}
-                {% endif %}
-              structure:
-                overview:
-                  description: "Short status of all cameras"
-                  required: true
-                  selector:
-                    text:
-                cameras_with_people:
-                  description: "List of cameras with people"
-                  required: true
-                  selector:
-                    text:
-                cameras_no_people:
-                  description: "List of cameras without people"
-                  required: true
-                  selector:
-                    text:
-                cameras_error:
-                  description: "List of cameras with errors"
-                  required: true
-                  selector:
-                    text:
-                summary:
-                  description: "One sentence summary in Vietnamese"
-                  required: true
-                  selector:
-                    text:
-            response_variable: ai_result
-      - conditions:
-          - condition: template
-            value_template: "{{ ai_task_entity is not none }}"
-        sequence:
-          - action: ai_task.generate_data
-            data:
-              entity_id: "{{ ai_task_entity }}"
-              task_name: "Smart Camera Analysis"
-              instructions: "{{ final_prompt }}"
-              attachments: >
-                {% if use_single_camera %}
-                  {{ [single_attachment | from_json] }}
-                {% else %}
-                  {{ all_attachments }}
-                {% endif %}
-              structure:
-                overview:
-                  description: "Short status of all cameras"
-                  required: true
-                  selector:
-                    text:
-                cameras_with_people:
-                  description: "List of cameras with people"
-                  required: true
-                  selector:
-                    text:
-                cameras_no_people:
-                  description: "List of cameras without people"
-                  required: true
-                  selector:
-                    text:
-                cameras_error:
-                  description: "List of cameras with errors"
-                  required: true
-                  selector:
-                    text:
-                summary:
-                  description: "One sentence summary in Vietnamese"
-                  required: true
-                  selector:
-                    text:
-            response_variable: ai_result
-
-  # 9. return
+- variables:
+    ai_task_entity: !input ai_task_entity
+    default_camera: !input default_camera
+    available_cameras: !input available_cameras
+    system_prompt: !input system_prompt
+    user_question: '{{ instructions | default('''') | trim }}'
+    camera_entity_raw: '{{ camera_entity | default('''') | trim }}'
+- if:
+  - condition: template
+    value_template: '{{ not user_question }}'
+  then:
   - variables:
       response:
-        mode: "{{ 'single' if use_single_camera else 'multi' }}"
-        camera_count: "{{ camera_count }}"
-        data: "{{ ai_result.data }}"
-  - stop: ""
+        error: Please provide a question about cameras.
+  - stop: Missing question
     response_variable: response
-
+- variables:
+    camera_list_text: "{% set ns = namespace(list=[]) %} {% for cam in available_cameras
+      %}\n  {% if states(cam) is not none %}\n    {% set name = state_attr(cam, 'friendly_name')
+      or cam %}\n    {% set ns.list = ns.list + ['- ' ~ name ~ ' (' ~ cam ~ ')'] %}\n
+      \ {% endif %}\n{% endfor %} {{ ns.list | join('\\n') }}\n"
+- variables:
+    user_question_lc: '{{ user_question | lower }}'
+    guessed_camera: "{% if 'phòng khách' in user_question_lc %}\n  camera.my_home_pk2\n{%
+      elif 'ban công' in user_question_lc %}\n  camera.my_home_bc\n{% elif 'cửa' in
+      user_question_lc %}\n  camera.my_home_pk1\n{% else %}\n  {{ '' }}\n{% endif
+      %}\n"
+- variables:
+    user_camera_valid: "{% if camera_entity_raw %}\n  {{ states(camera_entity_raw)
+      is not none }}\n{% else %}\n  false\n{% endif %}\n"
+    guessed_camera_valid: "{% if guessed_camera %}\n  {{ states(guessed_camera) is
+      not none }}\n{% else %}\n  false\n{% endif %}\n"
+    default_camera_valid: "{% if default_camera %}\n  {{ states(default_camera) is
+      not none }}\n{% else %}\n  false\n{% endif %}\n"
+    final_single_camera: "{% if user_camera_valid %}\n  {{ camera_entity_raw }}\n{%
+      elif guessed_camera_valid %}\n  {{ guessed_camera }}\n{% elif default_camera_valid
+      %}\n  {{ default_camera }}\n{% else %}\n  {% for cam in available_cameras %}\n
+      \   {% if states(cam) is not none %}\n      {{ cam }}\n      {% break %}\n    {%
+      endif %}\n  {% endfor %}\n{% endif %}\n"
+    use_single_camera: "{% set q = user_question | lower %} {% if 'tất cả' in q\n
+      \     or 'all camera' in q\n      or 'camera nào' in q\n      or 'những camera'
+      in q\n      or 'các camera' in q\n      or 'which cameras' in q\n      or 'check
+      all' in q %}\n  false\n{% else %}\n  true\n{% endif %}\n"
+- variables:
+    single_attachment: "{\n  \"media_content_id\": \"media-source://camera/{{ final_single_camera
+      }}\",\n  \"media_content_type\": \"application/vnd.apple.mpegurl\",\n  \"metadata\":
+      {\n    \"title\": \"{{ state_attr(final_single_camera, 'friendly_name') or final_single_camera
+      }}\",\n    \"thumbnail\": \"/api/camera_proxy/{{ final_single_camera }}\",\n
+      \   \"media_class\": \"video\"\n  }\n}\n"
+    all_attachments: "{% set ns = namespace(items=[]) %} {% for cam in available_cameras
+      %}\n  {% if states(cam) is not none %}\n    {% set name = state_attr(cam, 'friendly_name')
+      or cam %}\n    {% set item = {\n      'media_content_id': 'media-source://camera/'
+      ~ cam,\n      'media_content_type': 'application/vnd.apple.mpegurl',\n      'metadata':
+      {\n        'title': name,\n        'thumbnail': '/api/camera_proxy/' ~ cam,\n
+      \       'media_class': 'video'\n      }\n    } %}\n    {% set ns.items = ns.items
+      + [item] %}\n  {% endif %}\n{% endfor %} {{ ns.items }}\n"
+    camera_count: "{% set ok = [] %} {% for cam in available_cameras %}\n  {% if states(cam)
+      is not none %}\n    {% set ok = ok + [cam] %}\n  {% endif %}\n{% endfor %} {{
+      ok | length }}\n"
+- variables:
+    final_prompt: "{{ system_prompt\n   | replace('{camera_list}', camera_list_text)\n
+      \  | replace('{user_question}', user_question) }}\n"
+- choose:
+  - conditions:
+    - condition: template
+      value_template: '{{ not ai_task_entity }}'
+    sequence:
+    - action: ai_task.generate_data
+      data:
+        task_name: Smart Camera Analysis
+        instructions: '{{ final_prompt }}'
+        attachments: "{% if use_single_camera %}\n  {{ [single_attachment] }}\n{%
+          else %}\n  {{ all_attachments }}\n{% endif %}\n"
+        structure:
+          overview:
+            description: Short status of all cameras
+            required: true
+            selector:
+              text: {}
+          cameras_with_people:
+            description: List of cameras with people
+            required: true
+            selector:
+              text: {}
+          cameras_no_people:
+            description: List of cameras without people
+            required: true
+            selector:
+              text: {}
+          cameras_error:
+            description: List of cameras with errors
+            required: true
+            selector:
+              text: {}
+          summary:
+            description: One sentence summary in Vietnamese
+            required: true
+            selector:
+              text: {}
+      response_variable: ai_result
+  - conditions:
+    - condition: template
+      value_template: '{{ ai_task_entity is not none }}'
+    sequence:
+    - action: ai_task.generate_data
+      data:
+        entity_id: '{{ ai_task_entity }}'
+        task_name: Smart Camera Analysis
+        instructions: '{{ final_prompt }}'
+        attachments: "{% if use_single_camera %}\n  {{ [single_attachment] }}\n{%
+          else %}\n  {{ all_attachments }}\n{% endif %}\n"
+        structure:
+          overview:
+            description: Short status of all cameras
+            required: true
+            selector:
+              text: {}
+          cameras_with_people:
+            description: List of cameras with people
+            required: true
+            selector:
+              text: {}
+          cameras_no_people:
+            description: List of cameras without people
+            required: true
+            selector:
+              text: {}
+          cameras_error:
+            description: List of cameras with errors
+            required: true
+            selector:
+              text: {}
+          summary:
+            description: One sentence summary in Vietnamese
+            required: true
+            selector:
+              text: {}
+      response_variable: ai_result
+- variables:
+    response:
+      mode: '{{ ''single'' if use_single_camera else ''multi'' }}'
+      camera_count: '{{ camera_count }}'
+      data: '{{ ai_result.data }}'
+- stop: ''
+  response_variable: response
