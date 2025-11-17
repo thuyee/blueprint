@@ -2218,9 +2218,14 @@ action:
   - alias: "Send Message to Zalo"
     service: zalo_bot.send_message
     data:
-      message:  |
-         📢 Low Battery Notification:
-         {{notify_message}}     
+      message: |
+        {% if ( include_easy_notify == 'enable_easy_okay_notify' ) %}
+          📢 Low Battery Notification:
+          {{ easy_notify_message }}
+        {% else %}
+          Yes all batteries are okay
+        {% endif %}    
+ 
       thread_id: !input zalo_thread_id
       account_selection: !input zalo_account_selection
       type: !input zalo_type
