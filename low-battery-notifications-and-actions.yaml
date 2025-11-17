@@ -2219,11 +2219,11 @@ action:
     service: zalo_bot.send_message
     data:
       message: |
-        {% if ( notify_device | length > 0 ) %}
-          📢 Low Battery Notification:
-          {{ easy_notify_message }}
+        {% if notify_device | length > 0 %}
+        📢 Low Battery Notification:
+        {{ easy_notify_message }}
         {% else %}
-          Yes all batteries are okay
+        Yes all batteries are okay
         {% endif %}    
  
       thread_id: !input zalo_thread_id
