@@ -2223,6 +2223,7 @@ action:
         📢 Low Battery Notification:
         {{ easy_notify_message }}
         {% else %}
+        📢 Low Battery Notification:
         Yes all batteries are okay
         {% endif %}    
  
