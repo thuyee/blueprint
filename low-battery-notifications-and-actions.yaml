@@ -2218,7 +2218,9 @@ action:
   - alias: "Send Message to Zalo"
     service: zalo_bot.send_message
     data:
-      message: " 📢 Low Battery Notification: \n {{easy_notify_message}}"
+      message:  |
+         📢 Low Battery Notification:
+         {{easy_notify_message}}"
       thread_id: !input zalo_thread_id
       account_selection: !input zalo_account_selection
       type: !input zalo_type
