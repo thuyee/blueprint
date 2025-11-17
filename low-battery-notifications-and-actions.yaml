@@ -528,39 +528,7 @@ blueprint:
           default: Cancelled - Nothing was added to your To-Do list
           selector:
             text:
-    zalo_thread_id:
-      name: Zalo Thread ID
-      description: The Zalo thread/conversation ID to send the message to.
-      selector:
-        text: {}
-      default: ""
-    zalo_account_selection:
-      name: Zalo Account Selection
-      description: The Zalo account selection identifier.
-      selector:
-        text: {}
-      default: ""
-    zalo_type:
-      name: Zalo Message Type
-      description: Message type - 1 for group, 0 for personal.
-      selector:
-        select:
-          options:
-            - label: Personal (0)
-              value: "0"
-            - label: Group (1)
-              value: "1"
-      default: "1"
-    zalo_ttl:
-      name: Zalo Message TTL
-      description: Time to live (auto-delete time) in milliseconds. Set 0 to disable.
-      selector:
-        number:
-          min: 0
-          max: 86400000
-          step: 1000
-          unit_of_measurement: ms
-      default: 0
+
     easy_notify_ui:
       name: "Easy Notify - UI"
       icon: mdi:bell-check-outline
@@ -2215,19 +2183,4 @@ action:
                                           data:
                                             tag: !input notify_tag
                                         continue_on_error: true
-  - alias: "Send Message to Zalo"
-    service: zalo_bot.send_message
-    data:
-      message: |
-        {% if notify_device | length > 0 and easy_notify_message != '' %}
-        📢 Low Battery Notification:
-        {{ easy_notify_message }}
-        {% else %}
-        📢 Low Battery Notification:
-        Yes all batteries are okay
-        {% endif %}    
- 
-      thread_id: !input zalo_thread_id
-      account_selection: !input zalo_account_selection
-      type: !input zalo_type
-      ttl: !input zalo_ttl
+
