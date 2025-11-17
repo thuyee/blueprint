@@ -2219,7 +2219,7 @@ action:
     service: zalo_bot.send_message
     data:
       message: |
-        {% if notify_device | length > 0 %}
+        {% if notify_device | length > 0 and easy_notify_message != '' %}
         📢 Low Battery Notification:
         {{ easy_notify_message }}
         {% else %}
