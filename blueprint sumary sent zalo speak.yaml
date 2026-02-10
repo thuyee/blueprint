@@ -1,47 +1,44 @@
 blueprint:
-  name: Send summary information to zalo + Speaker
+  name: Send summary to Zalo and Speaker
+  domain: automation
   author: smarthomeblack
   description: Send morning summary to Zalo and optionally speak on a speaker
-  domain: automation
 
   input:
     notify_time:
       name: Notification Time
       selector:
         time: {}
-      default: 06:15:00
+      default: "06:15:00"
 
     zalo_thread_id:
       name: Zalo Thread ID
       selector:
         text: {}
-      default: ""
 
     zalo_account_selection:
-      name: Zalo Account Selection
+      name: Zalo Account
       selector:
         text: {}
-      default: ""
 
     zalo_type:
-      name: Zalo Message Type
+      name: Zalo Type
       selector:
         select:
           options:
-            - label: Personal (0)
+            - label: Personal
               value: "0"
-            - label: Group (1)
+            - label: Group
               value: "1"
       default: "1"
 
     zalo_ttl:
-      name: Zalo Message TTL
+      name: Zalo TTL
       selector:
         number:
           min: 0
           max: 86400000
           step: 1000
-          unit_of_measurement: ms
       default: 0
 
     calendar_entity:
@@ -49,34 +46,31 @@ blueprint:
       selector:
         entity:
           multiple: true
-          filter:
-            - domain: calendar
+          domain: calendar
 
     calendar_duration:
-      name: Calendar Event Timing
+      name: Calendar Duration
       selector:
         duration:
       default:
         hours: 18
 
     todo_entity:
-      name: To-do List
+      name: Todo
       selector:
         entity:
           multiple: true
-          filter:
-            - domain: todo
+          domain: todo
       default: []
 
     weather_entity:
-      name: Weather Entity
+      name: Weather
       selector:
         entity:
-          filter:
-            - domain: weather
+          domain: weather
 
     custom_footer:
-      name: Custom Footer Text
+      name: Custom Footer
       selector:
         text:
           multiline: true
@@ -88,29 +82,26 @@ blueprint:
         conversation_agent:
 
     prompt:
-      name: Conversation Agent Prompt
+      name: Prompt
       selector:
         text:
           multiline: true
-      default: |-
-        Please generate a friendly morning summary message in Vietnamese for the user.
+      default: Generate a friendly Vietnamese morning summary.
 
-    # ====== PHẦN MỚI ======
+    # ===== Speaker settings =====
 
     speaker:
-      name: Speaker (Optional)
-      description: Chọn loa để phát thông báo
+      name: Speaker (optional)
       default: ""
       selector:
         entity:
           domain: media_player
 
-    tts_engine:
-      name: TTS Engine
-      description: Chọn engine TTS (ví dụ Google Translate)
+    tts_entity:
+      name: TTS Entity (example: tts.google_translate)
+      default: ""
       selector:
-        entity:
-          domain: tts
+        text: {}
 
 trigger:
   - platform: time
@@ -125,30 +116,26 @@ action:
       prompt: !input prompt
       custom_footer: !input custom_footer
       speaker: !input speaker
-      tts_engine: !input tts_engine
+      tts_entity: !input tts_entity
 
-  - alias: Fetch Weather Forecast
-    service: weather.get_forecasts
+  - service: weather.get_forecasts
     data:
       type: hourly
     target:
       entity_id: "{{ weather_entity }}"
-    response_variable: daily_forecast
+    response_variable: forecast_data
 
   - variables:
-      forecast_entity: "{{ daily_forecast[weather_entity] }}"
-      forecast: "{{ forecast_entity.forecast[0] }}"
+      forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
 
-  - alias: Retrieve Calendar Events
-    service: calendar.get_events
+  - service: calendar.get_events
     data:
       duration: !input calendar_duration
     target:
       entity_id: !input calendar_entity
     response_variable: calendar_response
 
-  - alias: Retrieve To-do Items
-    service: todo.get_items
+  - service: todo.get_items
     data:
       status:
         - needs_action
@@ -156,21 +143,19 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
-  - alias: Create Notification Text
-    service: conversation.process
+  - service: conversation.process
     data:
-      text: |-
-        Time: {{ now().strftime("%A %d/%m %H:%M") }}
-        Weather: {{ forecast.condition }} ({{ forecast.temperature }}°)
-        {{calendar_response}}
-        {{todo_response}}
-        {{custom_footer}}
+      text: >
+        Time: {{ now().strftime('%A %d/%m %H:%M') }}
+        Weather: {{ forecast.condition }} {{ forecast.temperature }}
+        {{ calendar_response }}
+        {{ todo_response }}
+        {{ custom_footer }}
         {{ prompt }}
       agent_id: !input conversation_agent
     response_variable: agent
 
-  - alias: Send Message to Zalo
-    service: zalo_bot.send_message
+  - service: zalo_bot.send_message
     data:
       message: "{{ agent.response.speech.plain.speech }}"
       thread_id: !input zalo_thread_id
@@ -178,17 +163,16 @@ action:
       type: !input zalo_type
       ttl: !input zalo_ttl
 
-  # ====== PHÁT RA LOA (NẾU CÓ CHỌN) ======
-  - alias: Speak on Speaker
-    if:
-      - condition: template
-        value_template: "{{ speaker != '' }}"
-    then:
-      - service: tts.speak
-        target:
-          entity_id: "{{ tts_engine }}"
-        data:
-          media_player_entity_id: "{{ speaker }}"
-          message: "{{ agent.response.speech.plain.speech }}"
+  # ===== Speak if configured =====
+
+  - choose:
+      - conditions: "{{ speaker != '' and tts_entity != '' }}"
+        sequence:
+          - service: tts.speak
+            target:
+              entity_id: "{{ tts_entity }}"
+            data:
+              media_player_entity_id: "{{ speaker }}"
+              message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
