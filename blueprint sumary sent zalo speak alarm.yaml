@@ -1,8 +1,8 @@
 blueprint:
-  name: Send summary to Zalo + Speaker
+  name: Morning Summary Zalo + Alarm + Speaker
   domain: automation
   author: smarthomeblack
-  description: Send morning summary to Zalo and speak on a selected speaker
+  description: Send morning summary to Zalo, play alarm sound, then speak on speaker
 
   input:
     notify_time:
@@ -91,7 +91,6 @@ blueprint:
           multiline: true
       default: Generate a friendly Vietnamese morning summary.
 
-    # ===== Speaker =====
     speaker:
       name: Speaker (optional)
       default: ""
@@ -99,12 +98,27 @@ blueprint:
         entity:
           domain: media_player
 
-    # ===== TTS =====
     tts_engine:
       name: TTS Engine
       selector:
         entity:
           domain: tts
+
+    alarm_sound:
+      name: Alarm sound file (www)
+      description: Example alarm.mp3 (stored in /config/www)
+      default: ""
+      selector:
+        text: {}
+
+    alarm_duration:
+      name: Alarm duration (seconds)
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 120
+          step: 1
 
 trigger:
   - platform: time
@@ -119,7 +133,8 @@ action:
       prompt: !input prompt
       custom_footer: !input custom_footer
       speaker: !input speaker
-      tts_engine: !input tts_engine
+      alarm_sound: !input alarm_sound
+      alarm_duration: !input alarm_duration
 
   - service: weather.get_forecasts
     data:
@@ -166,11 +181,30 @@ action:
       type: !input zalo_type
       ttl: !input zalo_ttl
 
+  # ===== Speaker sequence =====
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ speaker != '' }}"
+            value_template: "{{ ( !input speaker ) != '' }}"
         sequence:
+
+          # Play alarm if configured
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ alarm_sound != '' }}"
+                sequence:
+                  - service: media_player.play_media
+                    target:
+                      entity_id: !input speaker
+                    data:
+                      media_content_id: "/local/{{ alarm_sound }}"
+                      media_content_type: music
+
+                  - delay:
+                      seconds: !input alarm_duration
+
+          # Speak message
           - service: tts.speak
             target:
               entity_id: !input tts_engine
