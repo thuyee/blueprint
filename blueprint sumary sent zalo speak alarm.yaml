@@ -1,7 +1,7 @@
 blueprint:
-name: Send summary to Zalo + Speaker (with Alarm)
+name: Morning Summary Zalo + Speaker + Alarm
 domain: automation
-description: Send morning summary to Zalo and speak on speaker with optional alarm sound before TTS
+description: Send summary to Zalo and play alarm then TTS on speaker
 
 input:
 notify_time:
@@ -40,44 +40,6 @@ zalo_ttl:
       max: 86400000
       step: 1000
 
-calendar_entity:
-  name: Calendar
-  selector:
-    entity:
-      multiple: true
-      filter:
-        - domain: calendar
-
-calendar_duration:
-  name: Calendar Duration
-  default:
-    hours: 18
-  selector:
-    duration:
-
-todo_entity:
-  name: Todo
-  default: []
-  selector:
-    entity:
-      multiple: true
-      filter:
-        - domain: todo
-
-weather_entity:
-  name: Weather
-  selector:
-    entity:
-      filter:
-        - domain: weather
-
-custom_footer:
-  name: Custom Footer
-  default: ""
-  selector:
-    text:
-      multiline: true
-
 conversation_agent:
   name: Conversation Agent
   selector:
@@ -85,14 +47,13 @@ conversation_agent:
 
 prompt:
   name: Prompt
-  default: Generate a friendly Vietnamese morning summary.
+  default: Tạo thông báo buổi sáng thân thiện bằng tiếng Việt.
   selector:
     text:
       multiline: true
 
-# ===== Speaker =====
 speaker:
-  name: Speaker (optional)
+  name: Speaker
   default: ""
   selector:
     entity:
@@ -104,23 +65,21 @@ tts_engine:
     entity:
       domain: tts
 
-# ===== Alarm before TTS =====
 enable_chime:
-  name: Enable alarm sound before TTS
+  name: Play alarm before TTS
   default: true
   selector:
     boolean:
 
 chime_file:
-  name: Chime file (/config/www)
-  description: Example: /local/alarm.mp3
+  name: Alarm file (www)
   default: /local/alarm.mp3
   selector:
     text:
 
 chime_duration:
-  name: Wait time before TTS (seconds)
-  default: 3
+  name: Delay before TTS (seconds)
+  default: 5
   selector:
     number:
       min: 1
@@ -142,15 +101,11 @@ action:
   chime_file: !input chime_file
   chime_duration: !input chime_duration
 
-# ===== Get AI summary =====
-
 * service: conversation.process
   data:
   text: !input prompt
   agent_id: !input conversation_agent
   response_variable: agent
-
-# ===== Send Zalo =====
 
 * service: zalo_bot.send_message
   data:
@@ -160,8 +115,6 @@ action:
   type: !input zalo_type
   ttl: !input zalo_ttl
 
-# ===== Speaker section =====
-
 * choose:
 
   * conditions:
@@ -170,8 +123,6 @@ action:
       value_template: "{{ speaker != '' }}"
       sequence:
 
-    # Alarm sound
-
     * choose:
 
       * conditions:
@@ -179,16 +130,16 @@ action:
         * condition: template
           value_template: "{{ enable_chime }}"
           sequence:
+
         * service: media_player.play_media
           target:
           entity_id: !input speaker
           data:
           media_content_id: "{{ chime_file }}"
           media_content_type: music
+
         * delay:
           seconds: !input chime_duration
-
-    # TTS
 
     * service: tts.speak
       target:
