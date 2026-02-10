@@ -1,39 +1,39 @@
 blueprint:
-  name: "Send summary to Zalo and Speaker"
+  name: Send summary to Zalo + Speaker
   domain: automation
   author: smarthomeblack
-  description: "Send morning summary to Zalo and optionally speak on a speaker"
+  description: Send morning summary to Zalo and speak on a selected speaker
 
   input:
     notify_time:
-      name: "Notification Time"
+      name: Notification Time
       selector:
         time: {}
       default: "06:15:00"
 
     zalo_thread_id:
-      name: "Zalo Thread ID"
+      name: Zalo Thread ID
       selector:
         text: {}
 
     zalo_account_selection:
-      name: "Zalo Account"
+      name: Zalo Account
       selector:
         text: {}
 
     zalo_type:
-      name: "Zalo Type"
+      name: Zalo Type
       selector:
         select:
           options:
-            - label: "Personal"
+            - label: Personal
               value: "0"
-            - label: "Group"
+            - label: Group
               value: "1"
       default: "1"
 
     zalo_ttl:
-      name: "Zalo TTL"
+      name: Zalo TTL
       selector:
         number:
           min: 0
@@ -42,64 +42,69 @@ blueprint:
       default: 0
 
     calendar_entity:
-      name: "Calendar"
+      name: Calendar
       selector:
         entity:
           multiple: true
-          domain: calendar
+          filter:
+            - domain: calendar
 
     calendar_duration:
-      name: "Calendar Duration"
+      name: Calendar Duration
       selector:
         duration:
       default:
         hours: 18
 
     todo_entity:
-      name: "Todo"
+      name: Todo
       selector:
         entity:
           multiple: true
-          domain: todo
+          filter:
+            - domain: todo
       default: []
 
     weather_entity:
-      name: "Weather"
+      name: Weather
       selector:
         entity:
-          domain: weather
+          filter:
+            - domain: weather
 
     custom_footer:
-      name: "Custom Footer"
+      name: Custom Footer
       selector:
         text:
           multiline: true
       default: ""
 
     conversation_agent:
-      name: "Conversation Agent"
+      name: Conversation Agent
       selector:
         conversation_agent:
 
     prompt:
-      name: "Prompt"
+      name: Prompt
       selector:
         text:
           multiline: true
-      default: "Generate a friendly Vietnamese morning summary."
+      default: Generate a friendly Vietnamese morning summary.
 
+    # ===== Speaker =====
     speaker:
-      name: "Speaker (optional)"
+      name: Speaker (optional)
       default: ""
       selector:
         entity:
           domain: media_player
 
-    tts_entity:
-      name: "TTS Entity (example: tts.google_translate)"
-      default: ""
+    # ===== TTS =====
+    tts_engine:
+      name: TTS Engine
       selector:
-        text: {}
+        entity:
+          domain: tts
 
 trigger:
   - platform: time
@@ -114,7 +119,7 @@ action:
       prompt: !input prompt
       custom_footer: !input custom_footer
       speaker: !input speaker
-      tts_entity: !input tts_entity
+      tts_engine: !input tts_engine
 
   - service: weather.get_forecasts
     data:
@@ -162,13 +167,15 @@ action:
       ttl: !input zalo_ttl
 
   - choose:
-      - conditions: "{{ speaker != '' and tts_entity != '' }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ speaker != '' }}"
         sequence:
           - service: tts.speak
             target:
-              entity_id: "{{ tts_entity }}"
+              entity_id: !input tts_engine
             data:
-              media_player_entity_id: "{{ speaker }}"
+              media_player_entity_id: !input speaker
               message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
