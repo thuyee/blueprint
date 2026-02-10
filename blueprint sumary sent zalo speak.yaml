@@ -1,0 +1,206 @@
+blueprint:
+  name: Send summary information to zalo
+  author: smarthomeblack
+  description: |-
+    Send summary information to zalo ✨
+    
+    I'm here to support you with your daily routines and make sure you're perfectly prepared to start your day! 💪🌞
+
+    🌦️ Weather
+    📅 Calendar
+    ✅ To-do List
+    🎉 Special Occasions
+
+  domain: automation
+
+  input:
+    notify_time:
+      name: Notification Time
+      selector:
+        time: {}
+      default: 06:15:00
+
+    zalo_thread_id:
+      name: Zalo Thread ID
+      selector:
+        text: {}
+      default: ""
+
+    zalo_account_selection:
+      name: Zalo Account Selection
+      selector:
+        text: {}
+      default: ""
+
+    zalo_type:
+      name: Zalo Message Type
+      selector:
+        select:
+          options:
+            - label: Personal (0)
+              value: "0"
+            - label: Group (1)
+              value: "1"
+      default: "1"
+
+    zalo_ttl:
+      name: Zalo Message TTL
+      selector:
+        number:
+          min: 0
+          max: 86400000
+          step: 1000
+          unit_of_measurement: ms
+      default: 0
+
+    calendar_entity:
+      name: Calendar
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: calendar
+
+    calendar_duration:
+      name: Calendar Event Timing
+      selector:
+        duration:
+      default:
+        hours: 18
+
+    todo_entity:
+      name: To-do List
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: todo
+      default: []
+
+    weather_entity:
+      name: Weather Entity
+      selector:
+        entity:
+          filter:
+            - domain: weather
+
+    custom_footer:
+      name: Custom Footer Text
+      selector:
+        text:
+          multiline: true
+      default: ""
+
+    conversation_agent:
+      name: Conversation Agent
+      selector:
+        conversation_agent:
+
+    prompt:
+      name: Conversation Agent Prompt
+      selector:
+        text:
+          multiline: true
+      default: |-
+        Please generate a friendly morning summary message in Vietnamese for the user.
+
+    #################################################################
+    # PHẦN MỚI: CHỌN LOA + TTS
+    #################################################################
+
+    speaker:
+      name: Speaker (Optional)
+      description: Chọn loa để phát thông báo
+      default: ""
+      selector:
+        entity:
+          domain: media_player
+
+    tts_engine:
+      name: TTS Engine
+      description: Chọn dịch vụ TTS (ví dụ: Google Translate)
+      selector:
+        entity:
+          domain: tts
+
+trigger:
+  - platform: time
+    at: !input notify_time
+
+action:
+  - variables:
+      weather_entity: !input weather_entity
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      custom_footer: !input custom_footer
+
+  - alias: Fetch Weather Forecast
+    service: weather.get_forecasts
+    data:
+      type: hourly
+    target:
+      entity_id: "{{ weather_entity }}"
+    response_variable: daily_forecast
+
+  - variables:
+      forecast_entity: "{{ daily_forecast[weather_entity] }}"
+      forecast: "{{ forecast_entity.forecast[0] }}"
+
+  - alias: Retrieve Calendar Events
+    service: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
+
+  - alias: Retrieve To-do Items
+    service: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
+
+  - alias: Create Notification Text
+    service: conversation.process
+    data:
+      text: |-
+        Time: {{ now().strftime("%A %d/%m %H:%M") }}
+        Weather: {{ forecast.condition }} ({{ forecast.temperature }}°)
+        {{calendar_response}}
+        {{todo_response}}
+        {{custom_footer}}
+        {{ prompt }}
+      agent_id: !input conversation_agent
+    response_variable: agent
+
+  - alias: Send Message to Zalo
+    service: zalo_bot.send_message
+    data:
+      message: "{{ agent.response.speech.plain.speech }}"
+      thread_id: !input zalo_thread_id
+      account_selection: !input zalo_account_selection
+      type: !input zalo_type
+      ttl: !input zalo_ttl
+
+  #################################################################
+  # PHẦN MỚI: PHÁT RA LOA
+  #################################################################
+
+  - alias: Speak on Speaker
+    if:
+      - condition: template
+        value_template: "{{ ( !input speaker ) != '' }}"
+    then:
+      - service: tts.speak
+        target:
+          entity_id: !input tts_engine
+        data:
+          media_player_entity_id: !input speaker
+          message: "{{ agent.response.speech.plain.speech }}"
+
+mode: single
