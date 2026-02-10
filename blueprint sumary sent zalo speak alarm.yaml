@@ -1,151 +1,227 @@
 blueprint:
-name: Morning Summary Zalo + Speaker + Alarm
-domain: automation
-description: Send summary to Zalo and play alarm then TTS on speaker
+  name: Send summary to Zalo + Speaker (Alarm before TTS)
+  domain: automation
+  author: smarthomeblack
+  description: Send morning summary to Zalo and speak on a selected speaker with optional alarm sound before TTS
 
-input:
-notify_time:
-name: Notification Time
-selector:
-time: {}
+  input:
+    notify_time:
+      name: Notification Time
+      selector:
+        time: {}
+      default: "06:15:00"
 
-zalo_thread_id:
-  name: Zalo Thread ID
-  selector:
-    text: {}
+    zalo_thread_id:
+      name: Zalo Thread ID
+      selector:
+        text: {}
 
-zalo_account_selection:
-  name: Zalo Account
-  selector:
-    text: {}
+    zalo_account_selection:
+      name: Zalo Account
+      selector:
+        text: {}
 
-zalo_type:
-  name: Zalo Type
-  default: "1"
-  selector:
-    select:
-      options:
-        - label: Personal
-          value: "0"
-        - label: Group
-          value: "1"
+    zalo_type:
+      name: Zalo Type
+      selector:
+        select:
+          options:
+            - label: Personal
+              value: "0"
+            - label: Group
+              value: "1"
+      default: "1"
 
-zalo_ttl:
-  name: Zalo TTL
-  default: 0
-  selector:
-    number:
-      min: 0
-      max: 86400000
-      step: 1000
+    zalo_ttl:
+      name: Zalo TTL
+      selector:
+        number:
+          min: 0
+          max: 86400000
+          step: 1000
+      default: 0
 
-conversation_agent:
-  name: Conversation Agent
-  selector:
+    calendar_entity:
+      name: Calendar
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: calendar
+
+    calendar_duration:
+      name: Calendar Duration
+      selector:
+        duration: {}
+      default:
+        hours: 18
+
+    todo_entity:
+      name: Todo
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: todo
+      default: []
+
+    weather_entity:
+      name: Weather
+      selector:
+        entity:
+          filter:
+            - domain: weather
+
+    custom_footer:
+      name: Custom Footer
+      selector:
+        text:
+          multiline: true
+      default: ""
+
     conversation_agent:
+      name: Conversation Agent
+      selector:
+        text: {}
+      default: "homeassistant"
 
-prompt:
-  name: Prompt
-  default: Tạo thông báo buổi sáng thân thiện bằng tiếng Việt.
-  selector:
-    text:
-      multiline: true
+    prompt:
+      name: Prompt
+      selector:
+        text:
+          multiline: true
+      default: Generate a friendly Vietnamese morning summary.
 
-speaker:
-  name: Speaker
-  default: ""
-  selector:
-    entity:
-      domain: media_player
+    # ===== Speaker =====
+    speaker:
+      name: Speaker (optional)
+      default: ""
+      selector:
+        entity:
+          domain: media_player
 
-tts_engine:
-  name: TTS Engine
-  selector:
-    entity:
-      domain: tts
+    # ===== TTS =====
+    tts_engine:
+      name: TTS Engine
+      selector:
+        entity:
+          domain: tts
 
-enable_chime:
-  name: Play alarm before TTS
-  default: true
-  selector:
-    boolean:
+    # ===== Alarm before TTS =====
+    alarm_enable:
+      name: Enable Alarm Before TTS
+      selector:
+        boolean:
+      default: false
 
-chime_file:
-  name: Alarm file (www)
-  default: /local/alarm.mp3
-  selector:
-    text:
+    alarm_sound:
+      name: Alarm Sound (file in www/audio)
+      description: Ví dụ: alarm.mp3 → /local/audio/alarm.mp3
+      selector:
+        text: {}
+      default: "alarm.mp3"
 
-chime_duration:
-  name: Delay before TTS (seconds)
-  default: 5
-  selector:
-    number:
-      min: 1
-      max: 60
-      step: 1
-
+    alarm_delay:
+      name: Delay after alarm (seconds)
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: seconds
+      default: 3
 
 trigger:
-
-* platform: time
-  at: !input notify_time
+  - platform: time
+    at: !input notify_time
 
 action:
+  - variables:
+      weather_entity: !input weather_entity
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      custom_footer: !input custom_footer
+      speaker: !input speaker
+      tts_engine: !input tts_engine
+      alarm_enable: !input alarm_enable
+      alarm_sound: !input alarm_sound
+      alarm_delay: !input alarm_delay
 
-* variables:
-  speaker: !input speaker
-  tts_engine: !input tts_engine
-  enable_chime: !input enable_chime
-  chime_file: !input chime_file
-  chime_duration: !input chime_duration
+  - service: weather.get_forecasts
+    data:
+      type: hourly
+    target:
+      entity_id: "{{ weather_entity }}"
+    response_variable: forecast_data
 
-* service: conversation.process
-  data:
-  text: !input prompt
-  agent_id: !input conversation_agent
-  response_variable: agent
+  - variables:
+      forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
 
-* service: zalo_bot.send_message
-  data:
-  message: "{{ agent.response.speech.plain.speech }}"
-  thread_id: !input zalo_thread_id
-  account_selection: !input zalo_account_selection
-  type: !input zalo_type
-  ttl: !input zalo_ttl
+  - service: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
 
-* choose:
+  - service: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
 
-  * conditions:
+  - service: conversation.process
+    data:
+      text: >
+        Time: {{ now().strftime('%A %d/%m %H:%M') }}
+        Weather: {{ forecast.condition }} {{ forecast.temperature }}
+        {{ calendar_response }}
+        {{ todo_response }}
+        {{ custom_footer }}
+        {{ prompt }}
+      agent_id: !input conversation_agent
+    response_variable: agent
 
-    * condition: template
-      value_template: "{{ speaker != '' }}"
-      sequence:
-
-    * choose:
-
-      * conditions:
-
-        * condition: template
-          value_template: "{{ enable_chime }}"
-          sequence:
-
-        * service: media_player.play_media
-          target:
-          entity_id: !input speaker
-          data:
-          media_content_id: "{{ chime_file }}"
-          media_content_type: music
-
-        * delay:
-          seconds: !input chime_duration
-
-    * service: tts.speak
-      target:
-      entity_id: !input tts_engine
-      data:
-      media_player_entity_id: !input speaker
+  - service: zalo_bot.send_message
+    data:
       message: "{{ agent.response.speech.plain.speech }}"
+      thread_id: !input zalo_thread_id
+      account_selection: !input zalo_account_selection
+      type: !input zalo_type
+      ttl: !input zalo_ttl
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ speaker != '' }}"
+        sequence:
+
+          # ===== Play Alarm =====
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ alarm_enable }}"
+                sequence:
+                  - service: media_player.play_media
+                    target:
+                      entity_id: !input speaker
+                    data:
+                      media_content_id: "/local/audio/{{ alarm_sound }}"
+                      media_content_type: music
+
+                  - delay:
+                      seconds: !input alarm_delay
+
+          # ===== Speak TTS =====
+          - service: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: !input speaker
+              message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
-
