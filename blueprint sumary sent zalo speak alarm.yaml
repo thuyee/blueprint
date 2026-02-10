@@ -1,8 +1,8 @@
 blueprint:
-  name: Send summary to Zalo + Speaker
+  name: Send summary to Zalo + Speaker (Alarm before TTS)
   domain: automation
   author: smarthomeblack
-  description: Send morning summary to Zalo and speak on a selected speaker
+  description: Send morning summary to Zalo and speak on a selected speaker with alarm before TTS
 
   input:
     notify_time:
@@ -79,6 +79,7 @@ blueprint:
           multiline: true
       default: ""
 
+    # ===== Agent (Dropdown) =====
     conversation_agent:
       name: Conversation Agent
       selector:
@@ -106,7 +107,7 @@ blueprint:
         entity:
           domain: tts
 
-    # ===== Alarm before TTS (THÊM MỚI) =====
+    # ===== Alarm before TTS =====
     alarm_enable:
       name: Enable alarm before TTS
       selector:
@@ -127,6 +128,7 @@ blueprint:
           min: 0
           max: 30
           step: 1
+          unit_of_measurement: seconds
       default: 3
 
 trigger:
@@ -143,10 +145,12 @@ action:
       custom_footer: !input custom_footer
       speaker: !input speaker
       tts_engine: !input tts_engine
+      conversation_agent: !input conversation_agent
       alarm_enable: !input alarm_enable
       alarm_sound: !input alarm_sound
       alarm_delay: !input alarm_delay
 
+  # ===== Weather =====
   - service: weather.get_forecasts
     data:
       type: hourly
@@ -157,6 +161,7 @@ action:
   - variables:
       forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
 
+  # ===== Calendar =====
   - service: calendar.get_events
     data:
       duration: !input calendar_duration
@@ -164,6 +169,7 @@ action:
       entity_id: !input calendar_entity
     response_variable: calendar_response
 
+  # ===== Todo =====
   - service: todo.get_items
     data:
       status:
@@ -172,6 +178,7 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
+  # ===== Conversation =====
   - service: conversation.process
     data:
       text: >
@@ -181,9 +188,10 @@ action:
         {{ todo_response }}
         {{ custom_footer }}
         {{ prompt }}
-      agent_id: !input conversation_agent
+      agent_id: "{{ conversation_agent }}"
     response_variable: agent
 
+  # ===== Send Zalo =====
   - service: zalo_bot.send_message
     data:
       message: "{{ agent.response.speech.plain.speech }}"
@@ -192,13 +200,14 @@ action:
       type: !input zalo_type
       ttl: !input zalo_ttl
 
+  # ===== Speaker =====
   - choose:
       - conditions:
           - condition: template
             value_template: "{{ speaker != '' }}"
         sequence:
 
-          # ===== Alarm trước TTS =====
+          # Alarm trước
           - choose:
               - conditions:
                   - condition: template
@@ -214,7 +223,7 @@ action:
                   - delay:
                       seconds: !input alarm_delay
 
-          # ===== TTS gốc =====
+          # TTS
           - service: tts.speak
             target:
               entity_id: !input tts_engine
