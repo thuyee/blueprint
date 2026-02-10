@@ -1,15 +1,13 @@
 blueprint:
-name: Send summary to Zalo + Speaker (with Alarm Chime)
+name: Send summary to Zalo + Speaker (with Alarm)
 domain: automation
-author: smarthomeblack + thuyee
-description: Send morning summary to Zalo and speak on a selected speaker with optional alarm chime before TTS
+description: Send morning summary to Zalo and speak on speaker with optional alarm sound before TTS
 
 input:
 notify_time:
 name: Notification Time
 selector:
 time: {}
-default: "06:15:00"
 
 ```
 zalo_thread_id:
@@ -24,6 +22,7 @@ zalo_account_selection:
 
 zalo_type:
   name: Zalo Type
+  default: "1"
   selector:
     select:
       options:
@@ -31,16 +30,15 @@ zalo_type:
           value: "0"
         - label: Group
           value: "1"
-  default: "1"
 
 zalo_ttl:
   name: Zalo TTL
+  default: 0
   selector:
     number:
       min: 0
       max: 86400000
       step: 1000
-  default: 0
 
 calendar_entity:
   name: Calendar
@@ -52,19 +50,19 @@ calendar_entity:
 
 calendar_duration:
   name: Calendar Duration
-  selector:
-    duration:
   default:
     hours: 18
+  selector:
+    duration:
 
 todo_entity:
   name: Todo
+  default: []
   selector:
     entity:
       multiple: true
       filter:
         - domain: todo
-  default: []
 
 weather_entity:
   name: Weather
@@ -75,10 +73,10 @@ weather_entity:
 
 custom_footer:
   name: Custom Footer
+  default: ""
   selector:
     text:
       multiline: true
-  default: ""
 
 conversation_agent:
   name: Conversation Agent
@@ -87,10 +85,10 @@ conversation_agent:
 
 prompt:
   name: Prompt
+  default: Generate a friendly Vietnamese morning summary.
   selector:
     text:
       multiline: true
-  default: Generate a friendly Vietnamese morning summary.
 
 # ===== Speaker =====
 speaker:
@@ -100,14 +98,13 @@ speaker:
     entity:
       domain: media_player
 
-# ===== TTS =====
 tts_engine:
   name: TTS Engine
   selector:
     entity:
       domain: tts
 
-# ===== Alarm Chime (NEW) =====
+# ===== Alarm before TTS =====
 enable_chime:
   name: Enable alarm sound before TTS
   default: true
@@ -115,14 +112,14 @@ enable_chime:
     boolean:
 
 chime_file:
-  name: Chime file (from www)
+  name: Chime file (/config/www)
   description: Example: /local/alarm.mp3
   default: /local/alarm.mp3
   selector:
     text:
 
 chime_duration:
-  name: Chime duration before TTS (seconds)
+  name: Wait time before TTS (seconds)
   default: 3
   selector:
     number:
@@ -139,54 +136,21 @@ trigger:
 action:
 
 * variables:
-  weather_entity: !input weather_entity
-  calendar_entity: !input calendar_entity
-  todo_entity: !input todo_entity
-  calendar_duration: !input calendar_duration
-  prompt: !input prompt
-  custom_footer: !input custom_footer
   speaker: !input speaker
   tts_engine: !input tts_engine
   enable_chime: !input enable_chime
   chime_file: !input chime_file
   chime_duration: !input chime_duration
 
-* service: weather.get_forecasts
-  data:
-  type: hourly
-  target:
-  entity_id: "{{ weather_entity }}"
-  response_variable: forecast_data
-
-* variables:
-  forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
-
-* service: calendar.get_events
-  data:
-  duration: !input calendar_duration
-  target:
-  entity_id: !input calendar_entity
-  response_variable: calendar_response
-
-* service: todo.get_items
-  data:
-  status:
-  - needs_action
-  target:
-  entity_id: !input todo_entity
-  response_variable: todo_response
+# ===== Get AI summary =====
 
 * service: conversation.process
   data:
-  text: >
-  Time: {{ now().strftime('%A %d/%m %H:%M') }}
-  Weather: {{ forecast.condition }} {{ forecast.temperature }}
-  {{ calendar_response }}
-  {{ todo_response }}
-  {{ custom_footer }}
-  {{ prompt }}
+  text: !input prompt
   agent_id: !input conversation_agent
   response_variable: agent
+
+# ===== Send Zalo =====
 
 * service: zalo_bot.send_message
   data:
@@ -206,7 +170,7 @@ action:
       value_template: "{{ speaker != '' }}"
       sequence:
 
-    # Phát chuông trước nếu bật
+    # Alarm sound
 
     * choose:
 
@@ -222,9 +186,9 @@ action:
           media_content_id: "{{ chime_file }}"
           media_content_type: music
         * delay:
-          seconds: "{{ chime_duration }}"
+          seconds: !input chime_duration
 
-    # Sau đó phát TTS
+    # TTS
 
     * service: tts.speak
       target:
