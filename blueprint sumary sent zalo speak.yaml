@@ -1,16 +1,7 @@
 blueprint:
-  name: Send summary information to zalo
+  name: Send summary information to zalo + Speaker
   author: smarthomeblack
-  description: |-
-    Send summary information to zalo ✨
-    
-    I'm here to support you with your daily routines and make sure you're perfectly prepared to start your day! 💪🌞
-
-    🌦️ Weather
-    📅 Calendar
-    ✅ To-do List
-    🎉 Special Occasions
-
+  description: Send morning summary to Zalo and optionally speak on a speaker
   domain: automation
 
   input:
@@ -104,9 +95,7 @@ blueprint:
       default: |-
         Please generate a friendly morning summary message in Vietnamese for the user.
 
-    #################################################################
-    # PHẦN MỚI: CHỌN LOA + TTS
-    #################################################################
+    # ====== PHẦN MỚI ======
 
     speaker:
       name: Speaker (Optional)
@@ -118,7 +107,7 @@ blueprint:
 
     tts_engine:
       name: TTS Engine
-      description: Chọn dịch vụ TTS (ví dụ: Google Translate)
+      description: Chọn engine TTS (ví dụ Google Translate)
       selector:
         entity:
           domain: tts
@@ -135,6 +124,8 @@ action:
       calendar_duration: !input calendar_duration
       prompt: !input prompt
       custom_footer: !input custom_footer
+      speaker: !input speaker
+      tts_engine: !input tts_engine
 
   - alias: Fetch Weather Forecast
     service: weather.get_forecasts
@@ -187,20 +178,17 @@ action:
       type: !input zalo_type
       ttl: !input zalo_ttl
 
-  #################################################################
-  # PHẦN MỚI: PHÁT RA LOA
-  #################################################################
-
+  # ====== PHÁT RA LOA (NẾU CÓ CHỌN) ======
   - alias: Speak on Speaker
     if:
       - condition: template
-        value_template: "{{ ( !input speaker ) != '' }}"
+        value_template: "{{ speaker != '' }}"
     then:
       - service: tts.speak
         target:
-          entity_id: !input tts_engine
+          entity_id: "{{ tts_engine }}"
         data:
-          media_player_entity_id: !input speaker
+          media_player_entity_id: "{{ speaker }}"
           message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
