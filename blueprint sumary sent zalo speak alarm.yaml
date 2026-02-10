@@ -2,7 +2,7 @@ blueprint:
   name: Send summary to Zalo + Speaker (Alarm before TTS)
   domain: automation
   author: smarthomeblack
-  description: Send morning summary to Zalo and speak on a selected speaker with optional alarm sound before TTS
+  description: Send morning summary to Zalo and speak on a selected speaker with optional alarm before TTS
 
   input:
     notify_time:
@@ -80,10 +80,10 @@ blueprint:
       default: ""
 
     conversation_agent:
-      name: Conversation Agent
+      name: Conversation Agent (agent_id)
       selector:
         text: {}
-      default: "homeassistant"
+      default: homeassistant
 
     prompt:
       name: Prompt
@@ -107,19 +107,19 @@ blueprint:
         entity:
           domain: tts
 
-    # ===== Alarm before TTS =====
+    # ===== Alarm settings =====
     alarm_enable:
-      name: Enable Alarm Before TTS
+      name: Enable alarm before TTS
       selector:
-        boolean:
+        boolean: {}
       default: false
 
     alarm_sound:
-      name: Alarm Sound (file in www/audio)
-      description: Ví dụ: alarm.mp3 → /local/audio/alarm.mp3
+      name: Alarm sound file (www/audio)
+      description: Ví dụ alarm.mp3 → /local/audio/alarm.mp3
       selector:
         text: {}
-      default: "alarm.mp3"
+      default: alarm.mp3
 
     alarm_delay:
       name: Delay after alarm (seconds)
@@ -140,7 +140,6 @@ action:
       weather_entity: !input weather_entity
       calendar_entity: !input calendar_entity
       todo_entity: !input todo_entity
-      calendar_duration: !input calendar_duration
       prompt: !input prompt
       custom_footer: !input custom_footer
       speaker: !input speaker
@@ -149,16 +148,18 @@ action:
       alarm_sound: !input alarm_sound
       alarm_delay: !input alarm_delay
 
+  # ===== Weather =====
   - service: weather.get_forecasts
     data:
       type: hourly
     target:
-      entity_id: "{{ weather_entity }}"
+      entity_id: !input weather_entity
     response_variable: forecast_data
 
   - variables:
       forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
 
+  # ===== Calendar =====
   - service: calendar.get_events
     data:
       duration: !input calendar_duration
@@ -166,6 +167,7 @@ action:
       entity_id: !input calendar_entity
     response_variable: calendar_response
 
+  # ===== Todo =====
   - service: todo.get_items
     data:
       status:
@@ -174,6 +176,7 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
+  # ===== AI Summary =====
   - service: conversation.process
     data:
       text: >
@@ -186,6 +189,7 @@ action:
       agent_id: !input conversation_agent
     response_variable: agent
 
+  # ===== Send Zalo =====
   - service: zalo_bot.send_message
     data:
       message: "{{ agent.response.speech.plain.speech }}"
@@ -194,13 +198,14 @@ action:
       type: !input zalo_type
       ttl: !input zalo_ttl
 
+  # ===== Speaker =====
   - choose:
       - conditions:
           - condition: template
             value_template: "{{ speaker != '' }}"
         sequence:
 
-          # ===== Play Alarm =====
+          # Play alarm if enabled
           - choose:
               - conditions:
                   - condition: template
@@ -216,7 +221,7 @@ action:
                   - delay:
                       seconds: !input alarm_delay
 
-          # ===== Speak TTS =====
+          # Speak TTS
           - service: tts.speak
             target:
               entity_id: !input tts_engine
