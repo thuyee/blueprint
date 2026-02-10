@@ -9,7 +9,6 @@ name: Notification Time
 selector:
 time: {}
 
-```
 zalo_thread_id:
   name: Zalo Thread ID
   selector:
@@ -85,7 +84,7 @@ chime_duration:
       min: 1
       max: 60
       step: 1
-```
+
 
 trigger:
 
@@ -149,3 +148,4 @@ action:
       message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
+
