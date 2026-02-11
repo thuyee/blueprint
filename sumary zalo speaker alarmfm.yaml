@@ -106,15 +106,8 @@ blueprint:
 
     # ===== Alarm settings =====
     alarm_sound:
-      name: Alarm file (www/audio/)
+      name: Alarm file (trong www/audio/)
       default: baothuc.mp3
-      selector:
-        text: {}
-
-    # THÊM: Base URL để chạy với DLNA
-    ha_base_url:
-      name: Home Assistant URL (vd: http://192.168.0.101:8123)
-      default: http://192.168.0.101:8123
       selector:
         text: {}
 
@@ -173,7 +166,9 @@ action:
       alarm_volume: !input alarm_volume
       tts_volume: !input tts_volume
       alarm_delay: !input alarm_delay
-      ha_base_url: !input ha_base_url
+
+      # TỰ ĐỘNG LẤY URL HASS
+      base_url: "{{ hass.config.internal_url or hass.config.external_url }}"
 
   - service: weather.get_forecasts
     data:
@@ -242,7 +237,7 @@ action:
                     entity_id: !input speaker
                   data:
                     media_content_id: >
-                      {{ ha_base_url }}/local/audio/{{ alarm_sound }}
+                      {{ base_url }}/local/audio/{{ alarm_sound }}
                     media_content_type: audio/mp3
                 - delay:
                     seconds: 5
