@@ -139,7 +139,7 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
-  # Chuyển dữ liệu calendar và todo thành chuỗi gọn gàng
+  # Chuyển dữ liệu calendar và todo thành chuỗi
   - variables:
       calendar_text: >
         {% if calendar_response %}
