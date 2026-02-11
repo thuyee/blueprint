@@ -1,8 +1,8 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (Alarm + TTS)
+  name: Send summary to Zalo + Speaker (Alarm Extended)
   domain: automation
-  author: smarthomeblack
-  description: Send morning summary to Zalo and play alarm before TTS
+  author: smarthomeblack + GPT
+  description: Send morning summary to Zalo and speak on a selected speaker with alarm options
 
   input:
     notify_time:
@@ -10,6 +10,13 @@ blueprint:
       selector:
         time: {}
       default: "06:15:00"
+
+    # ===== ZALO =====
+    enable_zalo:
+      name: Enable Send to Zalo
+      selector:
+        boolean:
+      default: true
 
     zalo_thread_id:
       name: Zalo Thread ID
@@ -41,6 +48,7 @@ blueprint:
           step: 1000
       default: 0
 
+    # ===== DATA =====
     calendar_entity:
       name: Calendar
       selector:
@@ -91,12 +99,60 @@ blueprint:
           multiline: true
       default: Generate a friendly Vietnamese morning summary.
 
+    # ===== SPEAKER =====
     speaker:
-      name: Speaker (optional)
+      name: Speaker
       default: ""
       selector:
         entity:
           domain: media_player
+
+    # ===== ALARM SETTINGS =====
+    enable_alarm:
+      name: Enable Alarm Sound
+      selector:
+        boolean:
+      default: true
+
+    alarm_url:
+      name: Alarm Sound URL
+      selector:
+        text:
+      default: "http://homeassistant.local:8123/local/audio/alarm.mp3"
+
+    alarm_repeat:
+      name: Alarm Repeat Times
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+      default: 2
+
+    alarm_volume:
+      name: Alarm Volume (0.0 – 1.0)
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+      default: 0.7
+
+    delay_before_tts:
+      name: Delay before TTS (seconds)
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+      default: 2
+
+    # ===== TTS =====
+    enable_tts:
+      name: Enable TTS
+      selector:
+        boolean:
+      default: true
 
     tts_engine:
       name: TTS Engine
@@ -104,48 +160,14 @@ blueprint:
         entity:
           domain: tts
 
-    # ===== Alarm settings =====
-    alarm_sound:
-      name: Alarm file (trong www/audio/)
-      default: baothuc.mp3
-      selector:
-        text: {}
-
-    alarm_repeat:
-      name: Alarm repeat times
-      default: 1
-      selector:
-        number:
-          min: 1
-          max: 10
-          step: 1
-
-    alarm_volume:
-      name: Alarm volume
-      default: 0.8
-      selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.05
-
     tts_volume:
-      name: TTS volume
-      default: 0.6
+      name: TTS Volume (0.0 – 1.0)
       selector:
         number:
           min: 0
           max: 1
           step: 0.05
-
-    alarm_delay:
-      name: Delay after alarm before TTS (seconds)
-      default: 3
-      selector:
-        number:
-          min: 0
-          max: 60
-          step: 1
+      default: 0.6
 
 trigger:
   - platform: time
@@ -160,16 +182,17 @@ action:
       prompt: !input prompt
       custom_footer: !input custom_footer
       speaker: !input speaker
-      tts_engine: !input tts_engine
-      alarm_sound: !input alarm_sound
+      enable_zalo: !input enable_zalo
+      enable_alarm: !input enable_alarm
+      enable_tts: !input enable_tts
+      alarm_url: !input alarm_url
       alarm_repeat: !input alarm_repeat
       alarm_volume: !input alarm_volume
+      delay_before_tts: !input delay_before_tts
+      tts_engine: !input tts_engine
       tts_volume: !input tts_volume
-      alarm_delay: !input alarm_delay
 
-      # TỰ ĐỘNG LẤY URL HASS
-      base_url: "{{ hass.config.internal_url or hass.config.external_url }}"
-
+  # ===== WEATHER =====
   - service: weather.get_forecasts
     data:
       type: hourly
@@ -180,6 +203,7 @@ action:
   - variables:
       forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
 
+  # ===== CALENDAR =====
   - service: calendar.get_events
     data:
       duration: !input calendar_duration
@@ -187,6 +211,7 @@ action:
       entity_id: !input calendar_entity
     response_variable: calendar_response
 
+  # ===== TODO =====
   - service: todo.get_items
     data:
       status:
@@ -195,6 +220,7 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
+  # ===== AI SUMMARY =====
   - service: conversation.process
     data:
       text: >
@@ -207,58 +233,65 @@ action:
       agent_id: !input conversation_agent
     response_variable: agent
 
-  - service: zalo_bot.send_message
-    data:
-      message: "{{ agent.response.speech.plain.speech }}"
-      thread_id: !input zalo_thread_id
-      account_selection: !input zalo_account_selection
-      type: !input zalo_type
-      ttl: !input zalo_ttl
-
+  # ===== SEND ZALO (OPTIONAL) =====
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ speaker != '' }}"
+            value_template: "{{ enable_zalo }}"
         sequence:
-
-          # Set alarm volume
-          - service: media_player.volume_set
-            target:
-              entity_id: !input speaker
+          - service: zalo_bot.send_message
             data:
-              volume_level: "{{ alarm_volume }}"
+              message: "{{ agent.response.speech.plain.speech }}"
+              thread_id: !input zalo_thread_id
+              account_selection: !input zalo_account_selection
+              type: !input zalo_type
+              ttl: !input zalo_ttl
 
-          # Repeat alarm
+  # ===== ALARM SOUND =====
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ enable_alarm and speaker != '' }}"
+        sequence:
           - repeat:
               count: "{{ alarm_repeat }}"
               sequence:
+                - service: media_player.volume_set
+                  target:
+                    entity_id: "{{ speaker }}"
+                  data:
+                    volume_level: "{{ alarm_volume }}"
+
                 - service: media_player.play_media
                   target:
-                    entity_id: !input speaker
+                    entity_id: "{{ speaker }}"
                   data:
-                    media_content_id: >
-                      {{ base_url }}/local/audio/{{ alarm_sound }}
-                    media_content_type: audio/mp3
-                - delay:
-                    seconds: 5
+                    media_content_id: "{{ alarm_url }}"
+                    media_content_type: music
 
-          # Delay before TTS
-          - delay:
-              seconds: "{{ alarm_delay }}"
+                - delay: "00:00:05"
 
-          # Set TTS volume
+  # ===== DELAY BEFORE TTS =====
+  - delay:
+      seconds: "{{ delay_before_tts }}"
+
+  # ===== TTS =====
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ enable_tts and speaker != '' }}"
+        sequence:
           - service: media_player.volume_set
             target:
-              entity_id: !input speaker
+              entity_id: "{{ speaker }}"
             data:
               volume_level: "{{ tts_volume }}"
 
-          # Speak
           - service: tts.speak
             target:
               entity_id: !input tts_engine
             data:
-              media_player_entity_id: !input speaker
+              media_player_entity_id: "{{ speaker }}"
               message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
