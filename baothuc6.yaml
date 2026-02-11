@@ -134,29 +134,11 @@ action:
 
   - service: todo.get_items
     data:
-      status: ["needs_action"]
+      status:
+        - needs_action
     target:
       entity_id: !input todo_entity
     response_variable: todo_response
-
-  # Chuyển dữ liệu calendar và todo thành chuỗi
-  - variables:
-      calendar_text: >
-        {% if calendar_response %}
-          {% for ev in calendar_response %}
-            {{ ev.summary }} lúc {{ ev.start }}
-          {% endfor %}
-        {% else %}
-          Không có sự kiện nào.
-        {% endif %}
-      todo_text: >
-        {% if todo_response %}
-          {% for item in todo_response %}
-            {{ item.summary }}
-          {% endfor %}
-        {% else %}
-          Không có việc cần làm.
-        {% endif %}
 
   - service: conversation.process
     data:
@@ -164,8 +146,8 @@ action:
       text: >
         Thời gian: {{ now().strftime('%A %d/%m %H:%M') }}
         Thời tiết: {{ forecast.condition }} {{ forecast.temperature }}°C
-        Lịch: {{ calendar_text }}
-        Việc cần làm: {{ todo_text }}
+        Lịch: {{ calendar_response }}
+        Việc cần làm: {{ todo_response }}
         {{ !input prompt }}
     response_variable: agent
 
