@@ -11,14 +11,12 @@ blueprint:
         time: {}
       default: "06:15:00"
 
-    # ===== Speaker =====
     speaker:
       name: Speaker
       selector:
         entity:
           domain: media_player
 
-    # ===== Alarm file =====
     alarm_file:
       name: Alarm file (in /www/audio/)
       description: "Example baothuc.mp3"
@@ -36,7 +34,6 @@ blueprint:
           step: 0.05
           mode: slider
 
-    # ===== Delay =====
     delay_after_alarm:
       name: Delay after alarm (seconds)
       default: 5
@@ -46,7 +43,6 @@ blueprint:
           max: 60
           step: 1
 
-    # ===== TTS =====
     tts_engine:
       name: TTS Engine
       selector:
@@ -63,7 +59,6 @@ blueprint:
           step: 0.05
           mode: slider
 
-    # ===== Data sources =====
     weather_entity:
       name: Weather
       selector:
@@ -120,7 +115,6 @@ action:
       delay_after_alarm: !input delay_after_alarm
       weather_entity: !input weather_entity
 
-  # ===== Get weather =====
   - service: weather.get_forecasts
     data:
       type: hourly
@@ -131,7 +125,6 @@ action:
   - variables:
       forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
 
-  # ===== Get calendar =====
   - service: calendar.get_events
     data:
       duration: !input calendar_duration
@@ -139,7 +132,6 @@ action:
       entity_id: !input calendar_entity
     response_variable: calendar_response
 
-  # ===== Get todo =====
   - service: todo.get_items
     data:
       status: ["needs_action"]
@@ -147,26 +139,42 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
-  # ===== Generate text =====
+  # Chuyển dữ liệu calendar và todo thành chuỗi gọn gàng
+  - variables:
+      calendar_text: >
+        {% if calendar_response %}
+          {% for ev in calendar_response %}
+            {{ ev.summary }} lúc {{ ev.start }}
+          {% endfor %}
+        {% else %}
+          Không có sự kiện nào.
+        {% endif %}
+      todo_text: >
+        {% if todo_response %}
+          {% for item in todo_response %}
+            {{ item.summary }}
+          {% endfor %}
+        {% else %}
+          Không có việc cần làm.
+        {% endif %}
+
   - service: conversation.process
     data:
       agent_id: !input conversation_agent
       text: >
         Thời gian: {{ now().strftime('%A %d/%m %H:%M') }}
         Thời tiết: {{ forecast.condition }} {{ forecast.temperature }}°C
-        Lịch: {{ calendar_response | tojson }}
-        Việc cần làm: {{ todo_response | tojson }}
+        Lịch: {{ calendar_text }}
+        Việc cần làm: {{ todo_text }}
         {{ !input prompt }}
     response_variable: agent
 
-  # ===== Set alarm volume =====
   - service: media_player.volume_set
     target:
       entity_id: !input speaker
     data:
       volume_level: !input alarm_volume
 
-  # ===== Play alarm file =====
   - service: media_player.play_media
     target:
       entity_id: !input speaker
@@ -174,18 +182,15 @@ action:
       media_content_id: "/local/audio/{{ alarm_file }}"
       media_content_type: "audio/mp3"
 
-  # ===== Wait =====
   - delay:
       seconds: !input delay_after_alarm
 
-  # ===== Set TTS volume =====
   - service: media_player.volume_set
     target:
       entity_id: !input speaker
     data:
       volume_level: !input tts_volume
 
-  # ===== Speak =====
   - service: tts.speak
     target:
       entity_id: !input tts_engine
