@@ -1,45 +1,15 @@
 blueprint:
-  name: Send summary to Zalo + Speaker
+  name: Morning Alarm + TTS Summary
   domain: automation
   author: smarthomeblack
-  description: Send morning summary to Zalo and speak on a selected speaker
+  description: Play alarm sound then speak morning summary
 
   input:
     notify_time:
-      name: Notification Time
+      name: Alarm Time
       selector:
         time: {}
       default: "06:15:00"
-
-    zalo_thread_id:
-      name: Zalo Thread ID
-      selector:
-        text: {}
-
-    zalo_account_selection:
-      name: Zalo Account
-      selector:
-        text: {}
-
-    zalo_type:
-      name: Zalo Type
-      selector:
-        select:
-          options:
-            - label: Personal
-              value: "0"
-            - label: Group
-              value: "1"
-      default: "1"
-
-    zalo_ttl:
-      name: Zalo TTL
-      selector:
-        number:
-          min: 0
-          max: 86400000
-          step: 1000
-      default: 0
 
     calendar_entity:
       name: Calendar
@@ -91,18 +61,56 @@ blueprint:
           multiline: true
       default: Generate a friendly Vietnamese morning summary.
 
+    # ===== Speaker =====
     speaker:
-      name: Speaker (optional)
-      default: ""
+      name: Speaker
       selector:
         entity:
           domain: media_player
 
+    # ===== Alarm file =====
+    alarm_file:
+      name: Alarm file (in /www/audio/)
+      description: "Example baothuc.mp3"
+      default: baothuc.mp3
+      selector:
+        text: {}
+
+    alarm_volume:
+      name: Alarm volume
+      default: 0.8
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    delay_after_alarm:
+      name: Delay after alarm (seconds)
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+
+    # ===== TTS =====
     tts_engine:
       name: TTS Engine
       selector:
         entity:
           domain: tts
+
+    tts_volume:
+      name: TTS volume
+      default: 0.6
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
 
 trigger:
   - platform: time
@@ -118,6 +126,10 @@ action:
       custom_footer: !input custom_footer
       speaker: !input speaker
       tts_engine: !input tts_engine
+      alarm_file: !input alarm_file
+      alarm_volume: !input alarm_volume
+      tts_volume: !input tts_volume
+      delay_after_alarm: !input delay_after_alarm
 
   - service: weather.get_forecasts
     data:
@@ -144,41 +156,47 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
-  # ép dữ liệu thành chuỗi
-  - variables:
-      calendar_text: "{{ calendar_response | tojson }}"
-      todo_text: "{{ todo_response | tojson }}"
-
   - service: conversation.process
     data:
       text: >
         Time: {{ now().strftime('%A %d/%m %H:%M') }}
-        Weather: {{ forecast.condition }} {{ forecast.temperature }}
-        Calendar: {{ calendar_text }}
-        Todo: {{ todo_text }}
+        Weather: {{ forecast.condition }} {{ forecast.temperature }}°C
+        Calendar: {{ calendar_response }}
+        Todo: {{ todo_response }}
         {{ custom_footer }}
         {{ prompt }}
       agent_id: !input conversation_agent
     response_variable: agent
 
-  - service: zalo_bot.send_message
+  # ===== Play alarm =====
+  - service: media_player.volume_set
+    target:
+      entity_id: !input speaker
     data:
-      message: "{{ agent.response.speech.plain.speech }}"
-      thread_id: !input zalo_thread_id
-      account_selection: !input zalo_account_selection
-      type: !input zalo_type
-      ttl: !input zalo_ttl
+      volume_level: !input alarm_volume
 
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ speaker != '' }}"
-        sequence:
-          - service: tts.speak
-            target:
-              entity_id: !input tts_engine
-            data:
-              media_player_entity_id: !input speaker
-              message: "{{ agent.response.speech.plain.speech }}"
+  - service: media_player.play_media
+    target:
+      entity_id: !input speaker
+    data:
+      media_content_id: "/local/audio/{{ alarm_file }}"
+      media_content_type: "audio/mp3"
+
+  - delay:
+      seconds: !input delay_after_alarm
+
+  # ===== Speak summary =====
+  - service: media_player.volume_set
+    target:
+      entity_id: !input speaker
+    data:
+      volume_level: !input tts_volume
+
+  - service: tts.speak
+    target:
+      entity_id: !input tts_engine
+    data:
+      media_player_entity_id: !input speaker
+      message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
