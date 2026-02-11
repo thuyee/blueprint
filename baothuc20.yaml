@@ -147,14 +147,33 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
+  # ép dữ liệu thành chuỗi
+  - variables:
+      calendar_text: >
+        {% if calendar_response %}
+          {% for ev in calendar_response %}
+            {{ ev.summary }} lúc {{ ev.start }}
+          {% endfor %}
+        {% else %}
+          Không có sự kiện nào.
+        {% endif %}
+      todo_text: >
+        {% if todo_response %}
+          {% for item in todo_response %}
+            {{ item.summary }}
+          {% endfor %}
+        {% else %}
+          Không có việc cần làm.
+        {% endif %}
+
   - service: conversation.process
     data:
       agent_id: !input conversation_agent
       text: >
         Time: {{ now().strftime('%A %d/%m %H:%M') }}
         Weather: {{ forecast.condition }} {{ forecast.temperature }}°C
-        Calendar: {{ calendar_response }}
-        Todo: {{ todo_response }}
+        Calendar: {{ calendar_text }}
+        Todo: {{ todo_text }}
         {{ !input prompt }}
     response_variable: agent
 
@@ -171,9 +190,6 @@ action:
     data:
       media_content_id: "media-source://media_source/local/{{ alarm_file }}"
       media_content_type: "audio/mpeg"
-      metadata:
-        title: "{{ alarm_file }}"
-        browse_entity_id: !input speaker
 
   - delay:
       seconds: !input delay_after_alarm
