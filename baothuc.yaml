@@ -21,7 +21,7 @@ blueprint:
     # ===== Alarm file =====
     alarm_file:
       name: Alarm file (in /www/audio/)
-      description: Example: baothuc.mp3
+      description: "Example: baothuc.mp3"
       default: baothuc.mp3
       selector:
         text: {}
