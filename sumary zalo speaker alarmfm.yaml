@@ -107,7 +107,14 @@ blueprint:
     # ===== Alarm settings =====
     alarm_sound:
       name: Alarm file (www/audio/)
-      default: ""
+      default: baothuc.mp3
+      selector:
+        text: {}
+
+    # THÊM: Base URL để chạy với DLNA
+    ha_base_url:
+      name: Home Assistant URL (vd: http://192.168.0.101:8123)
+      default: http://192.168.0.101:8123
       selector:
         text: {}
 
@@ -166,6 +173,7 @@ action:
       alarm_volume: !input alarm_volume
       tts_volume: !input tts_volume
       alarm_delay: !input alarm_delay
+      ha_base_url: !input ha_base_url
 
   - service: weather.get_forecasts
     data:
@@ -229,20 +237,19 @@ action:
           - repeat:
               count: "{{ alarm_repeat }}"
               sequence:
-                - condition: template
-                  value_template: "{{ alarm_sound != '' }}"
                 - service: media_player.play_media
                   target:
                     entity_id: !input speaker
                   data:
-                    media_content_id: media-source://media_source/local/audio/baothuc.mp3
-                    media_content_type: audio/mpeg
-                  metadata:
-                    title: baothuc.mp3
-                    media_class: music
-                    browse_entity_id: !input speaker  
+                    media_content_id: >
+                      {{ ha_base_url }}/local/audio/{{ alarm_sound }}
+                    media_content_type: audio/mp3
                 - delay:
-                    seconds: "{{ alarm_delay }}"
+                    seconds: 5
+
+          # Delay before TTS
+          - delay:
+              seconds: "{{ alarm_delay }}"
 
           # Set TTS volume
           - service: media_player.volume_set
