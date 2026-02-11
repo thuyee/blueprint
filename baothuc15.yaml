@@ -11,64 +11,12 @@ blueprint:
         time: {}
       default: "06:15:00"
 
-    calendar_entity:
-      name: Calendar
-      selector:
-        entity:
-          multiple: true
-          filter:
-            - domain: calendar
-
-    calendar_duration:
-      name: Calendar Duration
-      selector:
-        duration:
-      default:
-        hours: 18
-
-    todo_entity:
-      name: Todo
-      selector:
-        entity:
-          multiple: true
-          filter:
-            - domain: todo
-      default: []
-
-    weather_entity:
-      name: Weather
-      selector:
-        entity:
-          filter:
-            - domain: weather
-
-    custom_footer:
-      name: Custom Footer
-      selector:
-        text:
-          multiline: true
-      default: ""
-
-    conversation_agent:
-      name: Conversation Agent
-      selector:
-        conversation_agent:
-
-    prompt:
-      name: Prompt
-      selector:
-        text:
-          multiline: true
-      default: Generate a friendly Vietnamese morning summary.
-
-    # ===== Speaker =====
     speaker:
       name: Speaker
       selector:
         entity:
           domain: media_player
 
-    # ===== Alarm file =====
     alarm_file:
       name: Alarm file (in /www/audio/)
       description: "Example: baothuc.mp3"
@@ -102,7 +50,6 @@ blueprint:
           max: 60
           step: 1
 
-    # ===== TTS =====
     tts_engine:
       name: TTS Engine
       selector:
@@ -119,31 +66,68 @@ blueprint:
           step: 0.05
           mode: slider
 
+    weather_entity:
+      name: Weather
+      selector:
+        entity:
+          filter:
+            - domain: weather
+
+    calendar_entity:
+      name: Calendar
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: calendar
+
+    calendar_duration:
+      name: Calendar Duration
+      selector:
+        duration:
+      default:
+        hours: 18
+
+    todo_entity:
+      name: Todo
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: todo
+      default: []
+
+    conversation_agent:
+      name: Conversation Agent
+      selector:
+        conversation_agent:
+
+    prompt:
+      name: Prompt
+      selector:
+        text:
+          multiline: true
+      default: Generate a friendly Vietnamese morning summary.
+
 trigger:
   - platform: time
     at: !input notify_time
 
 action:
   - variables:
-      weather_entity: !input weather_entity
-      calendar_entity: !input calendar_entity
-      todo_entity: !input todo_entity
-      calendar_duration: !input calendar_duration
-      prompt: !input prompt
-      custom_footer: !input custom_footer
       speaker: !input speaker
-      tts_engine: !input tts_engine
       alarm_file: !input alarm_file
       hass_url: !input hass_url
       alarm_volume: !input alarm_volume
       tts_volume: !input tts_volume
       delay_after_alarm: !input delay_after_alarm
+      weather_entity: !input weather_entity
 
   - service: weather.get_forecasts
     data:
       type: hourly
     target:
-      entity_id: "{{ weather_entity }}"
+      entity_id: !input weather_entity
     response_variable: forecast_data
 
   - variables:
@@ -166,14 +150,13 @@ action:
 
   - service: conversation.process
     data:
+      agent_id: !input conversation_agent
       text: >
         Time: {{ now().strftime('%A %d/%m %H:%M') }}
         Weather: {{ forecast.condition }} {{ forecast.temperature }}°C
         Calendar: {{ calendar_response }}
         Todo: {{ todo_response }}
-        {{ custom_footer }}
-        {{ prompt }}
-      agent_id: !input conversation_agent
+        {{ !input prompt }}
     response_variable: agent
 
   # ===== Play alarm =====
