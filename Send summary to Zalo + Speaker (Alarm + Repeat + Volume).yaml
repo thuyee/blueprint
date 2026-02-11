@@ -1,8 +1,8 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (Alarm + Repeat + Volume)
+  name: Send summary to Zalo + Speaker (Alarm + Repeat)
   domain: automation
   author: smarthomeblack
-  description: Send morning summary to Zalo, play alarm sound with repeat, then speak TTS
+  description: Send summary to Zalo, play alarm sound (repeat), then speak TTS
 
 input:
   notify_time:
@@ -106,17 +106,16 @@ input:
       entity:
         domain: tts
 
-  # ===== Alarm Sound =====
+  # ===== Alarm =====
   alarm_sound:
     name: Alarm file (www/audio/)
-    description: Example: alarm.mp3
+    description: "Example: alarm.mp3"
     default: ""
     selector:
       text: {}
 
   alarm_repeat:
-    name: Alarm Repeat Times
-    description: Number of times to repeat alarm
+    name: Alarm repeat times
     default: 1
     selector:
       number:
@@ -125,7 +124,7 @@ input:
         step: 1
 
   alarm_volume:
-    name: Alarm Volume
+    name: Alarm volume
     default: 0.8
     selector:
       number:
@@ -134,7 +133,7 @@ input:
         step: 0.05
 
   tts_volume:
-    name: TTS Volume
+    name: TTS volume
     default: 0.6
     selector:
       number:
@@ -143,7 +142,7 @@ input:
         step: 0.05
 
   alarm_delay:
-    name: Delay after alarm before TTS (seconds)
+    name: Delay between alarms / before TTS (seconds)
     default: 3
     selector:
       number:
@@ -173,7 +172,7 @@ action:
       tts_volume: !input tts_volume
       alarm_delay: !input alarm_delay
 
-  # ===== Weather =====
+  # Weather
   - service: weather.get_forecasts
     data:
       type: hourly
@@ -184,7 +183,7 @@ action:
   - variables:
       forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
 
-  # ===== Calendar =====
+  # Calendar
   - service: calendar.get_events
     data:
       duration: !input calendar_duration
@@ -192,7 +191,7 @@ action:
       entity_id: !input calendar_entity
     response_variable: calendar_response
 
-  # ===== Todo =====
+  # Todo
   - service: todo.get_items
     data:
       status:
@@ -201,7 +200,7 @@ action:
       entity_id: !input todo_entity
     response_variable: todo_response
 
-  # ===== Generate message =====
+  # Generate text
   - service: conversation.process
     data:
       text: >
@@ -214,7 +213,7 @@ action:
       agent_id: !input conversation_agent
     response_variable: agent
 
-  # ===== Send Zalo =====
+  # Send Zalo
   - service: zalo_bot.send_message
     data:
       message: "{{ agent.response.speech.plain.speech }}"
@@ -223,7 +222,7 @@ action:
       type: !input zalo_type
       ttl: !input zalo_ttl
 
-  # ===== Speaker part =====
+  # Speaker section
   - choose:
       - conditions:
           - condition: template
@@ -263,7 +262,7 @@ action:
             data:
               volume_level: "{{ tts_volume }}"
 
-          # Speak
+          # Speak TTS
           - service: tts.speak
             target:
               entity_id: !input tts_engine
