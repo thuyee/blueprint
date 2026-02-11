@@ -1,0 +1,272 @@
+blueprint:
+  name: Send summary to Zalo + Speaker (Alarm + Repeat + Volume)
+  domain: automation
+  author: smarthomeblack
+  description: Send morning summary to Zalo, play alarm sound with repeat, then speak TTS
+
+input:
+  notify_time:
+    name: Notification Time
+    selector:
+      time: {}
+    default: "06:15:00"
+
+  zalo_thread_id:
+    name: Zalo Thread ID
+    selector:
+      text: {}
+
+  zalo_account_selection:
+    name: Zalo Account
+    selector:
+      text: {}
+
+  zalo_type:
+    name: Zalo Type
+    selector:
+      select:
+        options:
+          - label: Personal
+            value: "0"
+          - label: Group
+            value: "1"
+      default: "1"
+
+  zalo_ttl:
+    name: Zalo TTL
+    selector:
+      number:
+        min: 0
+        max: 86400000
+        step: 1000
+    default: 0
+
+  calendar_entity:
+    name: Calendar
+    selector:
+      entity:
+        multiple: true
+        filter:
+          - domain: calendar
+
+  calendar_duration:
+    name: Calendar Duration
+    selector:
+      duration:
+    default:
+      hours: 18
+
+  todo_entity:
+    name: Todo
+    selector:
+      entity:
+        multiple: true
+        filter:
+          - domain: todo
+    default: []
+
+  weather_entity:
+    name: Weather
+    selector:
+      entity:
+        filter:
+          - domain: weather
+
+  custom_footer:
+    name: Custom Footer
+    selector:
+      text:
+        multiline: true
+    default: ""
+
+  conversation_agent:
+    name: Conversation Agent
+    selector:
+      conversation_agent:
+
+  prompt:
+    name: Prompt
+    selector:
+      text:
+        multiline: true
+    default: Generate a friendly Vietnamese morning summary.
+
+  # ===== Speaker =====
+  speaker:
+    name: Speaker (optional)
+    default: ""
+    selector:
+      entity:
+        domain: media_player
+
+  # ===== TTS =====
+  tts_engine:
+    name: TTS Engine
+    selector:
+      entity:
+        domain: tts
+
+  # ===== Alarm Sound =====
+  alarm_sound:
+    name: Alarm file (www/audio/)
+    description: Example: alarm.mp3
+    default: ""
+    selector:
+      text: {}
+
+  alarm_repeat:
+    name: Alarm Repeat Times
+    description: Number of times to repeat alarm
+    default: 1
+    selector:
+      number:
+        min: 1
+        max: 10
+        step: 1
+
+  alarm_volume:
+    name: Alarm Volume
+    default: 0.8
+    selector:
+      number:
+        min: 0
+        max: 1
+        step: 0.05
+
+  tts_volume:
+    name: TTS Volume
+    default: 0.6
+    selector:
+      number:
+        min: 0
+        max: 1
+        step: 0.05
+
+  alarm_delay:
+    name: Delay after alarm before TTS (seconds)
+    default: 3
+    selector:
+      number:
+        min: 0
+        max: 60
+        step: 1
+
+trigger:
+  - platform: time
+    at: !input notify_time
+
+mode: single
+
+action:
+  - variables:
+      weather_entity: !input weather_entity
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      custom_footer: !input custom_footer
+      speaker: !input speaker
+      tts_engine: !input tts_engine
+      alarm_sound: !input alarm_sound
+      alarm_repeat: !input alarm_repeat
+      alarm_volume: !input alarm_volume
+      tts_volume: !input tts_volume
+      alarm_delay: !input alarm_delay
+
+  # ===== Weather =====
+  - service: weather.get_forecasts
+    data:
+      type: hourly
+    target:
+      entity_id: "{{ weather_entity }}"
+    response_variable: forecast_data
+
+  - variables:
+      forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
+
+  # ===== Calendar =====
+  - service: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
+
+  # ===== Todo =====
+  - service: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
+
+  # ===== Generate message =====
+  - service: conversation.process
+    data:
+      text: >
+        Time: {{ now().strftime('%A %d/%m %H:%M') }}
+        Weather: {{ forecast.condition }} {{ forecast.temperature }}
+        {{ calendar_response }}
+        {{ todo_response }}
+        {{ custom_footer }}
+        {{ prompt }}
+      agent_id: !input conversation_agent
+    response_variable: agent
+
+  # ===== Send Zalo =====
+  - service: zalo_bot.send_message
+    data:
+      message: "{{ agent.response.speech.plain.speech }}"
+      thread_id: !input zalo_thread_id
+      account_selection: !input zalo_account_selection
+      type: !input zalo_type
+      ttl: !input zalo_ttl
+
+  # ===== Speaker part =====
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ speaker != '' }}"
+        sequence:
+
+          # Set alarm volume
+          - service: media_player.volume_set
+            target:
+              entity_id: !input speaker
+            data:
+              volume_level: "{{ alarm_volume }}"
+
+          # Repeat alarm
+          - repeat:
+              count: "{{ alarm_repeat }}"
+              sequence:
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ alarm_sound != '' }}"
+                      sequence:
+                        - service: media_player.play_media
+                          target:
+                            entity_id: !input speaker
+                          data:
+                            media_content_id: "/local/audio/{{ alarm_sound }}"
+                            media_content_type: music
+
+                        - delay:
+                            seconds: "{{ alarm_delay }}"
+
+          # Set TTS volume
+          - service: media_player.volume_set
+            target:
+              entity_id: !input speaker
+            data:
+              volume_level: "{{ tts_volume }}"
+
+          # Speak
+          - service: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: !input speaker
+              message: "{{ agent.response.speech.plain.speech }}"
