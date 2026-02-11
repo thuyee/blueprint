@@ -61,14 +61,12 @@ blueprint:
           multiline: true
       default: Generate a friendly Vietnamese morning summary.
 
-    # ===== Speaker =====
     speaker:
       name: Speaker
       selector:
         entity:
           domain: media_player
 
-    # ===== Alarm file =====
     alarm_file:
       name: Alarm file (in /www/audio/)
       description: "Example: baothuc.mp3"
@@ -102,7 +100,6 @@ blueprint:
           max: 60
           step: 1
 
-    # ===== TTS =====
     tts_engine:
       name: TTS Engine
       selector:
