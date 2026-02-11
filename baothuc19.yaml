@@ -74,13 +74,6 @@ blueprint:
       selector:
         text: {}
 
-    hass_url:
-      name: Home Assistant URL (optional)
-      description: "Ví dụ: http://192.168.0.101:8123. Nếu để trống sẽ dùng /local/audio/..."
-      default: ""
-      selector:
-        text: {}
-
     alarm_volume:
       name: Alarm volume
       default: 0.8
@@ -124,7 +117,6 @@ action:
   - variables:
       speaker: !input speaker
       alarm_file: !input alarm_file
-      hass_url: !input hass_url
       alarm_volume: !input alarm_volume
       tts_volume: !input tts_volume
       delay_after_alarm: !input delay_after_alarm
@@ -167,9 +159,6 @@ action:
     response_variable: agent
 
   # ===== Play alarm =====
-  - variables:
-      alarm_url: "{{ hass_url ~ '/local/audio/' ~ alarm_file if hass_url != '' else '/local/audio/' ~ alarm_file }}"
-
   - service: media_player.volume_set
     target:
       entity_id: !input speaker
@@ -180,8 +169,11 @@ action:
     target:
       entity_id: !input speaker
     data:
-      media_content_id: "{{ alarm_url }}"
-      media_content_type: "audio/mp3"
+      media_content_id: "media-source://media_source/local/{{ alarm_file }}"
+      media_content_type: "audio/mpeg"
+      metadata:
+        title: "{{ alarm_file }}"
+        browse_entity_id: !input speaker
 
   - delay:
       seconds: !input delay_after_alarm
