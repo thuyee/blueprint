@@ -1,14 +1,15 @@
 blueprint:
-  name: Morning Zalo + Alarm + TTS
-  description: Send summary to Zalo, play alarm sound N times, then speak TTS
+  name: Send summary to Zalo + Speaker (Alarm + TTS)
   domain: automation
+  author: smarthomeblack
+  description: Send morning summary to Zalo and play alarm before TTS
 
   input:
     notify_time:
       name: Notification Time
-      default: "06:15:00"
       selector:
         time: {}
+      default: "06:15:00"
 
     zalo_thread_id:
       name: Zalo Thread ID
@@ -22,7 +23,6 @@ blueprint:
 
     zalo_type:
       name: Zalo Type
-      default: "1"
       selector:
         select:
           options:
@@ -30,65 +30,69 @@ blueprint:
               value: "0"
             - label: Group
               value: "1"
+      default: "1"
 
     zalo_ttl:
       name: Zalo TTL
-      default: 0
       selector:
         number:
           min: 0
           max: 86400000
           step: 1000
-
-    weather_entity:
-      name: Weather
-      selector:
-        entity:
-          domain: weather
+      default: 0
 
     calendar_entity:
       name: Calendar
       selector:
         entity:
           multiple: true
-          domain: calendar
+          filter:
+            - domain: calendar
 
     calendar_duration:
       name: Calendar Duration
+      selector:
+        duration:
       default:
         hours: 18
-      selector:
-        duration: {}
 
     todo_entity:
       name: Todo
-      default: []
       selector:
         entity:
           multiple: true
-          domain: todo
+          filter:
+            - domain: todo
+      default: []
+
+    weather_entity:
+      name: Weather
+      selector:
+        entity:
+          filter:
+            - domain: weather
 
     custom_footer:
       name: Custom Footer
-      default: ""
       selector:
         text:
           multiline: true
+      default: ""
 
     conversation_agent:
       name: Conversation Agent
       selector:
-        conversation_agent: {}
+        conversation_agent:
 
     prompt:
       name: Prompt
-      default: Generate a friendly Vietnamese morning summary.
       selector:
         text:
           multiline: true
+      default: Generate a friendly Vietnamese morning summary.
 
     speaker:
-      name: Speaker
+      name: Speaker (optional)
       default: ""
       selector:
         entity:
@@ -100,6 +104,7 @@ blueprint:
         entity:
           domain: tts
 
+    # ===== Alarm settings =====
     alarm_sound:
       name: Alarm file (www/audio/)
       default: ""
@@ -134,7 +139,7 @@ blueprint:
           step: 0.05
 
     alarm_delay:
-      name: Delay between alarms (seconds)
+      name: Delay after alarm before TTS (seconds)
       default: 3
       selector:
         number:
@@ -146,10 +151,14 @@ trigger:
   - platform: time
     at: !input notify_time
 
-mode: single
-
 action:
   - variables:
+      weather_entity: !input weather_entity
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      custom_footer: !input custom_footer
       speaker: !input speaker
       tts_engine: !input tts_engine
       alarm_sound: !input alarm_sound
@@ -158,9 +167,46 @@ action:
       tts_volume: !input tts_volume
       alarm_delay: !input alarm_delay
 
+  - service: weather.get_forecasts
+    data:
+      type: hourly
+    target:
+      entity_id: "{{ weather_entity }}"
+    response_variable: forecast_data
+
+  - variables:
+      forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
+
+  - service: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
+
+  - service: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
+
+  - service: conversation.process
+    data:
+      text: >
+        Time: {{ now().strftime('%A %d/%m %H:%M') }}
+        Weather: {{ forecast.condition }} {{ forecast.temperature }}
+        {{ calendar_response }}
+        {{ todo_response }}
+        {{ custom_footer }}
+        {{ prompt }}
+      agent_id: !input conversation_agent
+    response_variable: agent
+
   - service: zalo_bot.send_message
     data:
-      message: "Chào buổi sáng!"
+      message: "{{ agent.response.speech.plain.speech }}"
       thread_id: !input zalo_thread_id
       account_selection: !input zalo_account_selection
       type: !input zalo_type
@@ -172,37 +218,41 @@ action:
             value_template: "{{ speaker != '' }}"
         sequence:
 
+          # Set alarm volume
           - service: media_player.volume_set
             target:
               entity_id: !input speaker
             data:
               volume_level: "{{ alarm_volume }}"
 
+          # Repeat alarm
           - repeat:
               count: "{{ alarm_repeat }}"
               sequence:
                 - condition: template
                   value_template: "{{ alarm_sound != '' }}"
-
                 - service: media_player.play_media
                   target:
                     entity_id: !input speaker
                   data:
                     media_content_id: "/local/audio/{{ alarm_sound }}"
                     media_content_type: music
-
                 - delay:
                     seconds: "{{ alarm_delay }}"
 
+          # Set TTS volume
           - service: media_player.volume_set
             target:
               entity_id: !input speaker
             data:
               volume_level: "{{ tts_volume }}"
 
+          # Speak
           - service: tts.speak
             target:
               entity_id: !input tts_engine
             data:
               media_player_entity_id: !input speaker
-              message: "Chúc bạn một ngày tốt lành"
+              message: "{{ agent.response.speech.plain.speech }}"
+
+mode: single
