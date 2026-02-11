@@ -76,6 +76,13 @@ blueprint:
       selector:
         text: {}
 
+    hass_url:
+      name: Home Assistant URL (optional)
+      description: "Ví dụ: http://192.168.0.101:8123. Nếu để trống sẽ dùng /local/audio/..."
+      default: ""
+      selector:
+        text: {}
+
     alarm_volume:
       name: Alarm volume
       default: 0.8
@@ -127,6 +134,7 @@ action:
       speaker: !input speaker
       tts_engine: !input tts_engine
       alarm_file: !input alarm_file
+      hass_url: !input hass_url
       alarm_volume: !input alarm_volume
       tts_volume: !input tts_volume
       delay_after_alarm: !input delay_after_alarm
@@ -179,7 +187,12 @@ action:
     target:
       entity_id: !input speaker
     data:
-      media_content_id: "/local/audio/{{ alarm_file }}"
+      media_content_id: >
+        {% if hass_url != "" %}
+          {{ hass_url }}/local/audio/{{ alarm_file }}
+        {% else %}
+          /local/audio/{{ alarm_file }}
+        {% endif %}
       media_content_type: "audio/mp3"
 
   - delay:
