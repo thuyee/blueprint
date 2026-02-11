@@ -168,12 +168,7 @@ action:
 
   # ===== Play alarm =====
   - variables:
-      alarm_url: >
-        {% if hass_url != "" %}
-          {{ hass_url }}/local/audio/{{ alarm_file }}
-        {% else %}
-          /local/audio/{{ alarm_file }}
-        {% endif %}
+      alarm_url: "{{ hass_url ~ '/local/audio/' ~ alarm_file if hass_url != '' else '/local/audio/' ~ alarm_file }}"
 
   - service: media_player.volume_set
     target:
