@@ -237,6 +237,10 @@ action:
                   data:
                     media_content_id: media-source://media_source/local/audio/baothuc.mp3
                     media_content_type: audio/mpeg
+                  metadata:
+                    title: baothuc.mp3
+                    media_class: music
+                    
                 - delay:
                     seconds: "{{ alarm_delay }}"
 
