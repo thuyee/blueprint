@@ -1,8 +1,8 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (Full Alarm Stable)
+  name: Send summary to Zalo + Speaker (DLNA Stable Full)
   domain: automation
   author: smarthomeblack + GPT
-  description: Morning summary with Zalo, Alarm loop (stable), and TTS
+  description: Morning summary with stable alarm loop for DLNA/Phicomm + Zalo + TTS
 
   input:
     notify_time:
@@ -19,17 +19,14 @@ blueprint:
       default: true
 
     zalo_thread_id:
-      name: Zalo Thread ID
       selector:
         text: {}
 
     zalo_account_selection:
-      name: Zalo Account
       selector:
         text: {}
 
     zalo_type:
-      name: Zalo Type
       selector:
         select:
           options:
@@ -40,7 +37,6 @@ blueprint:
       default: "1"
 
     zalo_ttl:
-      name: Zalo TTL
       selector:
         number:
           min: 0
@@ -94,11 +90,10 @@ blueprint:
 
     # ===== SPEAKER =====
     speaker:
-      name: Speaker
-      default: ""
       selector:
         entity:
           domain: media_player
+      default: ""
 
     # ===== ALARM =====
     enable_alarm:
@@ -120,10 +115,19 @@ blueprint:
           min: 1
           max: 20
           step: 1
-      default: 3
+      default: 2
+
+    alarm_duration:
+      name: Alarm duration (seconds)
+      description: Length of alarm audio file
+      selector:
+        number:
+          min: 1
+          max: 600
+          step: 1
+      default: 8
 
     alarm_volume:
-      name: Alarm Volume (0-1)
       selector:
         number:
           min: 0
@@ -132,7 +136,6 @@ blueprint:
       default: 0.7
 
     delay_before_tts:
-      name: Delay before TTS (seconds)
       selector:
         number:
           min: 0
@@ -142,7 +145,6 @@ blueprint:
 
     # ===== TTS =====
     enable_tts:
-      name: Enable TTS
       selector:
         boolean:
       default: true
@@ -153,7 +155,6 @@ blueprint:
           domain: tts
 
     tts_volume:
-      name: TTS Volume
       selector:
         number:
           min: 0
@@ -179,6 +180,7 @@ action:
       enable_tts: !input enable_tts
       alarm_url: !input alarm_url
       alarm_repeat: !input alarm_repeat
+      alarm_duration: !input alarm_duration
       alarm_volume: !input alarm_volume
       delay_before_tts: !input delay_before_tts
       tts_engine: !input tts_engine
@@ -238,7 +240,7 @@ action:
               type: !input zalo_type
               ttl: !input zalo_ttl
 
-  # ===== ALARM LOOP (ỔN ĐỊNH - KHÔNG CẮT FILE) =====
+  # ===== ALARM LOOP (DLNA STABLE) =====
   - choose:
       - conditions:
           - "{{ enable_alarm and speaker != '' }}"
@@ -252,7 +254,6 @@ action:
           - repeat:
               count: "{{ alarm_repeat }}"
               sequence:
-
                 - service: media_player.play_media
                   target:
                     entity_id: "{{ speaker }}"
@@ -260,17 +261,16 @@ action:
                     media_content_id: "{{ alarm_url }}"
                     media_content_type: music
 
-                # đợi bắt đầu phát
-                - wait_template: >
-                    {{ states(speaker) == 'playing' }}
-                  timeout: "00:00:10"
+                - delay:
+                    seconds: "{{ alarm_duration }}"
 
-                # đợi phát xong
-                - wait_template: >
-                    {{ states(speaker) in ['idle','paused','off'] }}
-                  timeout: "00:10:00"
+                - service: media_player.media_stop
+                  target:
+                    entity_id: "{{ speaker }}"
 
-  # ===== DELAY =====
+                - delay: "00:00:01"
+
+  # ===== DELAY BEFORE TTS =====
   - delay:
       seconds: "{{ delay_before_tts }}"
 
