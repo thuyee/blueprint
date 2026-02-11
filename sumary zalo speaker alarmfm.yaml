@@ -235,8 +235,8 @@ action:
                   target:
                     entity_id: !input speaker
                   data:
-                    media_content_id: "/local/audio/{{ alarm_sound }}"
-                    media_content_type: music
+                    media_content_id: media-source://media_source/local/audio/baothuc.mp3
+                    media_content_type: audio/mpeg
                 - delay:
                     seconds: "{{ alarm_delay }}"
 
