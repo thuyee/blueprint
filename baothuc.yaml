@@ -1,0 +1,225 @@
+blueprint:
+name: Alarm + Repeat Sound + TTS Summary
+domain: automation
+author: smarthomeblack (modified)
+description: >
+Alarm with custom sound from www/audio, repeat times, volume control,
+delay before speaking TTS morning summary.
+
+input:
+notify_time:
+name: Alarm Time
+selector:
+time: {}
+default: "06:15:00"
+
+```
+speaker:
+  name: Speaker
+  selector:
+    entity:
+      domain: media_player
+
+alarm_sound:
+  name: Alarm Sound Path
+  description: Ví dụ /local/audio/alarm.mp3
+  default: "/local/audio/alarm.mp3"
+  selector:
+    text: {}
+
+alarm_volume:
+  name: Alarm Volume
+  description: 0.0 → 1.0
+  default: 0.7
+  selector:
+    number:
+      min: 0
+      max: 1
+      step: 0.05
+      mode: slider
+
+repeat_count:
+  name: Repeat Alarm Times
+  default: 3
+  selector:
+    number:
+      min: 1
+      max: 20
+      step: 1
+
+repeat_delay:
+  name: Delay Between Repeats (seconds)
+  default: 5
+  selector:
+    number:
+      min: 1
+      max: 60
+      step: 1
+
+tts_delay:
+  name: Delay Before TTS (seconds)
+  default: 5
+  selector:
+    number:
+      min: 0
+      max: 120
+      step: 1
+
+# ===== Weather / Calendar / Todo =====
+calendar_entity:
+  name: Calendar
+  selector:
+    entity:
+      multiple: true
+      filter:
+        - domain: calendar
+
+calendar_duration:
+  name: Calendar Duration
+  selector:
+    duration:
+  default:
+    hours: 18
+
+todo_entity:
+  name: Todo
+  selector:
+    entity:
+      multiple: true
+      filter:
+        - domain: todo
+  default: []
+
+weather_entity:
+  name: Weather
+  selector:
+    entity:
+      filter:
+        - domain: weather
+
+custom_footer:
+  name: Custom Footer
+  selector:
+    text:
+      multiline: true
+  default: ""
+
+conversation_agent:
+  name: Conversation Agent
+  selector:
+    conversation_agent:
+
+prompt:
+  name: Prompt
+  selector:
+    text:
+      multiline: true
+  default: Tạo lời chào buổi sáng thân thiện bằng tiếng Việt.
+
+tts_engine:
+  name: TTS Engine
+  selector:
+    entity:
+      domain: tts
+```
+
+trigger:
+
+* platform: time
+  at: !input notify_time
+
+action:
+
+* variables:
+  speaker: !input speaker
+  alarm_sound: !input alarm_sound
+  alarm_volume: !input alarm_volume
+  repeat_count: !input repeat_count
+  repeat_delay: !input repeat_delay
+  tts_delay: !input tts_delay
+  weather_entity: !input weather_entity
+  prompt: !input prompt
+  custom_footer: !input custom_footer
+
+# Set volume
+
+* service: media_player.volume_set
+  target:
+  entity_id: !input speaker
+  data:
+  volume_level: "{{ alarm_volume }}"
+
+# Repeat alarm sound
+
+* repeat:
+  count: "{{ repeat_count }}"
+  sequence:
+  - service: media_player.play_media
+  target:
+  entity_id: !input speaker
+  data:
+  media_content_id: "{{ alarm_sound }}"
+  media_content_type: music
+  - delay:
+  seconds: "{{ repeat_delay }}"
+
+# Delay before TTS
+
+* delay:
+  seconds: "{{ tts_delay }}"
+
+# ===== Get Weather =====
+
+* service: weather.get_forecasts
+  data:
+  type: hourly
+  target:
+  entity_id: !input weather_entity
+  response_variable: forecast_data
+
+* variables:
+  forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
+
+# ===== Calendar =====
+
+* service: calendar.get_events
+  data:
+  duration: !input calendar_duration
+  target:
+  entity_id: !input calendar_entity
+  response_variable: calendar_response
+
+# ===== Todo =====
+
+* service: todo.get_items
+  data:
+  status:
+  - needs_action
+  target:
+  entity_id: !input todo_entity
+  response_variable: todo_response
+
+# ===== AI Summary =====
+
+* service: conversation.process
+  data:
+  text: >
+  Time: {{ now().strftime('%A %d/%m %H:%M') }}
+  Weather: {{ forecast.condition }} {{ forecast.temperature }}
+  {{ calendar_response }}
+  {{ todo_response }}
+  {{ custom_footer }}
+  {{ prompt }}
+  agent_id: !input conversation_agent
+  response_variable: agent
+
+# Speak
+
+* service: tts.speak
+  target:
+  entity_id: !input tts_engine
+  data:
+  media_player_entity_id: !input speaker
+  message: "{{ agent.response.speech.plain.speech }}"
+
+mode: single
