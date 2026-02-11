@@ -240,7 +240,7 @@ action:
                   metadata:
                     title: baothuc.mp3
                     media_class: music
-                    
+                    browse_entity_id: !input speaker  
                 - delay:
                     seconds: "{{ alarm_delay }}"
 
