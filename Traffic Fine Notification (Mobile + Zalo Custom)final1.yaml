@@ -1,6 +1,6 @@
 blueprint:
   name: Traffic Fine Notification (Mobile + Zalo Bot)
-  author: luuquangvu + fixed by ChatGPT
+  author: luuquangvu + fixed
   domain: automation
   homeassistant:
     min_version: 2024.10.0
@@ -8,7 +8,6 @@ blueprint:
   input:
     vehicles:
       name: Vehicles
-      description: Các sensor biển số xe (template sensor)
       selector:
         entity:
           filter:
@@ -31,33 +30,26 @@ blueprint:
 
     zalo_account:
       name: Zalo Account Selection
-      description: Ví dụ +84868837123
       selector:
         text:
 
 mode: queued
 max_exceeded: silent
 
-variables:
-  zalo_thread: !input zalo_thread_id
-  zalo_account_selection: !input zalo_account
-  vehicle_name: "{{ trigger.to_state.name if trigger.to_state is not none else '' }}"
-  vehicle_state: "{{ trigger.to_state.state if trigger.to_state is not none else '' }}"
-
 triggers:
-  - platform: state
+  - trigger: state
     entity_id: !input vehicles
 
 conditions:
   - condition: template
     value_template: >
       {{ trigger.from_state is not none
-         and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+         and trigger.from_state.state not in ['unavailable','unknown'] }}
 
   - condition: template
     value_template: >
       {{ trigger.to_state is not none
-         and trigger.to_state.state not in ['unavailable', 'unknown'] }}
+         and trigger.to_state.state not in ['unavailable','unknown'] }}
 
   - condition: template
     value_template: >
@@ -67,27 +59,28 @@ conditions:
 actions:
 
   ####################################################
-  # 📱 Gửi Mobile App
+  # 📱 MOBILE APP
   ####################################################
   - repeat:
       for_each: !input notify_device
       sequence:
-        - service: notify.mobile_app_{{ device_attr(repeat.item, 'name') | slugify }}
+        - action: notify.mobile_app
           data:
-            title: "🚗 Xe {{ vehicle_name }}"
-            message: "{{ vehicle_state }}"
+            target: "{{ repeat.item }}"
+            title: "🚗 Xe {{ trigger.to_state.name }}"
+            message: "{{ trigger.to_state.state }}"
             data:
               tag: "{{ 'traffic_fine_' ~ trigger.entity_id }}"
 
   ####################################################
-  # 💬 Gửi Zalo Bot chuẩn của anh
+  # 💬 ZALO BOT
   ####################################################
-  - service: zalo_bot.send_message
+  - action: zalo_bot.send_message
     data:
       type: "1"
       message: >
-        🚗 Xe {{ vehicle_name }}
+        🚗 Xe {{ trigger.to_state.name }}
 
-        {{ vehicle_state }}
-      thread_id: "{{ zalo_thread }}"
-      account_selection: "{{ zalo_account_selection }}"
+        {{ trigger.to_state.state }}
+      thread_id: !input zalo_thread_id
+      account_selection: !input zalo_account
