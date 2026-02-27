@@ -1,0 +1,20 @@
+  - repeat:
+      for_each: !input notify_device
+      sequence:
+        - action: notify.mobile_app
+          data:
+            target: "{{ repeat.item }}"
+            title: "🚗 Xe {{ trigger.to_state.attributes.friendly_name }}"
+            message: "{{ trigger.to_state.state }}"
+            data:
+              tag: "{{ 'traffic_fine_' ~ trigger.entity_id }}"
+
+  - action: zalo_bot.send_message
+    data:
+      type: "1"
+      message: >
+        🚗 Xe {{ trigger.to_state.attributes.friendly_name }}
+
+        {{ trigger.to_state.state }}
+      thread_id: !input zalo_thread_id
+      account_selection: !input zalo_account
