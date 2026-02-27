@@ -1,6 +1,5 @@
 blueprint:
   name: Traffic Fine Notification (Mobile + Zalo Bot)
-  author: luuquangvu + fixed
   domain: automation
   homeassistant:
     min_version: 2024.10.0
@@ -40,26 +39,23 @@ triggers:
   - trigger: state
     entity_id: !input vehicles
 
+variables:
+  vehicle_name: >
+    {{ trigger.to_state.name if trigger is defined and trigger.to_state is defined else '' }}
+  vehicle_state: >
+    {{ trigger.to_state.state if trigger is defined and trigger.to_state is defined else '' }}
+  vehicle_entity: >
+    {{ trigger.entity_id if trigger is defined else '' }}
+
 conditions:
   - condition: template
     value_template: >
-      {{ trigger.from_state is not none
-         and trigger.from_state.state not in ['unavailable','unknown'] }}
-
-  - condition: template
-    value_template: >
-      {{ trigger.to_state is not none
-         and trigger.to_state.state not in ['unavailable','unknown'] }}
-
-  - condition: template
-    value_template: >
-      {{ trigger.to_state.attributes.get('data') is defined
-         and not trigger.to_state.attributes.data.get('error') }}
+      {{ vehicle_state not in ['unknown','unavailable',''] }}
 
 actions:
 
   ####################################################
-  # 📱 MOBILE APP
+  # 📱 MOBILE
   ####################################################
   - repeat:
       for_each: !input notify_device
@@ -67,20 +63,20 @@ actions:
         - action: notify.mobile_app
           data:
             target: "{{ repeat.item }}"
-            title: "🚗 Xe {{ trigger.to_state.name }}"
-            message: "{{ trigger.to_state.state }}"
+            title: "🚗 Xe {{ vehicle_name }}"
+            message: "{{ vehicle_state }}"
             data:
-              tag: "{{ 'traffic_fine_' ~ trigger.entity_id }}"
+              tag: "{{ 'traffic_fine_' ~ vehicle_entity }}"
 
   ####################################################
-  # 💬 ZALO BOT
+  # 💬 ZALO
   ####################################################
   - action: zalo_bot.send_message
     data:
       type: "1"
       message: >
-        🚗 Xe {{ trigger.to_state.name }}
+        🚗 Xe {{ vehicle_name }}
 
-        {{ trigger.to_state.state }}
+        {{ vehicle_state }}
       thread_id: !input zalo_thread_id
       account_selection: !input zalo_account
