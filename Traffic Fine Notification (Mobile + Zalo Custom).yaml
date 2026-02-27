@@ -1,6 +1,6 @@
 blueprint:
-  name: Traffic Fine Notification (Mobile + Zalo Custom)
-  author: luuquangvu + modified by ChatGPT
+  name: Traffic Fine Notification (Mobile + Zalo Bot)
+  author: luuquangvu + modified for Zalo Bot
   domain: automation
   homeassistant:
     min_version: 2024.10.0
@@ -23,16 +23,14 @@ blueprint:
             - integration: mobile_app
           multiple: true
 
-    zalo_service:
-      name: Zalo service name
-      description: Ví dụ script.send_zalo_message hoặc pyscript.zalo_send
-      default: ""
+    zalo_thread_id:
+      name: Zalo Thread ID
       selector:
         text:
 
-    zalo_thread_id:
-      name: Zalo thread id
-      default: ""
+    zalo_account:
+      name: Zalo Account Selection
+      description: Ví dụ +84868837123
       selector:
         text:
 
@@ -40,8 +38,8 @@ mode: queued
 max_exceeded: silent
 
 variables:
-  zalo_service_name: !input zalo_service
   zalo_thread: !input zalo_thread_id
+  zalo_account_selection: !input zalo_account
 
 triggers:
   - trigger: state
@@ -49,15 +47,22 @@ triggers:
 
 conditions:
   - condition: template
-    value_template: "{{ trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown'] }}"
+    value_template: >
+      {{ trigger.from_state is not none 
+         and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+
   - condition: template
-    value_template: "{{ trigger.to_state is not none and trigger.to_state.state not in ['unavailable', 'unknown'] }}"
+    value_template: >
+      {{ trigger.to_state is not none 
+         and trigger.to_state.state not in ['unavailable', 'unknown'] }}
+
   - condition: template
-    value_template: "{{ not trigger.to_state.attributes.data.get('error') }}"
+    value_template: >
+      {{ not trigger.to_state.attributes.data.get('error') }}
 
 actions:
 
-  # 📱 Mobile App
+  # 📱 Gửi Mobile App
   - repeat:
       for_each: !input notify_device
       sequence:
@@ -68,15 +73,13 @@ actions:
             data:
               tag: "{{ 'traffic_fine_' ~ trigger.entity_id }}"
 
-  # 💬 Zalo Custom
-  - if:
-      - condition: template
-        value_template: "{{ zalo_service_name != '' }}"
-    then:
-      - action: "{{ zalo_service_name }}"
-        data:
-          thread_id: "{{ zalo_thread }}"
-          message: >
-            🚗 Xe {{ trigger.to_state.attributes.friendly_name }}
-            
-            {{ trigger.to_state.state }}
+  # 💬 Gửi Zalo Bot chuẩn của anh
+  - action: zalo_bot.send_message
+    data:
+      type: "1"
+      message: >
+        🚗 Xe {{ trigger.to_state.attributes.friendly_name }}
+
+        {{ trigger.to_state.state }}
+      thread_id: "{{ zalo_thread }}"
+      account_selection: "{{ zalo_account_selection }}"
