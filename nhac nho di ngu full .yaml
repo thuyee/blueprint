@@ -1,8 +1,8 @@
 blueprint:
-  name: AI Good Night Reminder (Zalo + Mobile + TTS)
+  name: AI Good Night Reminder (Full Control)
   domain: automation
-  author: GPT chỉnh theo style của m
-  description: Nhắc đi ngủ bằng AI + Zalo + Notification + Loa
+  author: GPT fix chuẩn theo yêu cầu
+  description: Nhắc đi ngủ bằng AI + chọn mobile + Zalo + bật/tắt loa
 
   input:
     notify_time:
@@ -16,24 +16,30 @@ blueprint:
       selector:
         conversation_agent:
 
-    custom_prompt:
-      name: Prompt tùy chỉnh
+    prompt:
       selector:
         text:
           multiline: true
       default: >
         Bây giờ là 23h đêm.
 
-        Hãy đóng vai một người thân trong gia đình, nhắc mọi người trước khi đi ngủ.
+        Hãy đóng vai người thân trong gia đình, nhắc mọi người trước khi ngủ.
+        Nếu còn cửa mở hoặc đèn bật → nhắc tự nhiên, KHÔNG liệt kê.
+        Nếu ổn rồi → khen nhẹ.
+        Cuối cùng chúc ngủ ngon.
 
-        Dựa vào trạng thái nhà thông minh:
-        - Nếu còn cửa mở hoặc đèn bật → nhắc nhẹ nhàng, tự nhiên
-        - Không liệt kê dạng danh sách
-        - Nói chuyện đời thường
+    # ===== MOBILE =====
+    enable_mobile:
+      name: Bật thông báo điện thoại
+      selector:
+        boolean:
+      default: true
 
-        Nếu mọi thứ ổn → khen nhẹ.
-
-        Kết thúc bằng lời chúc ngủ ngon ấm áp.
+    mobile_notify:
+      name: Chọn notify điện thoại
+      selector:
+        entity:
+          domain: notify
 
     # ===== ZALO =====
     enable_zalo:
@@ -59,20 +65,9 @@ blueprint:
               value: "1"
       default: "1"
 
-    # ===== MOBILE =====
-    enable_mobile:
-      selector:
-        boolean:
-      default: true
-
-    mobile_notify_service:
-      name: Service notify mobile
-      selector:
-        text:
-      default: "notify.notify"
-
     # ===== SPEAKER =====
     enable_tts:
+      name: Bật phát loa
       selector:
         boolean:
       default: false
@@ -101,9 +96,9 @@ trigger:
 
 action:
   - variables:
-      prompt: !input custom_prompt
-      enable_zalo: !input enable_zalo
+      prompt: !input prompt
       enable_mobile: !input enable_mobile
+      enable_zalo: !input enable_zalo
       enable_tts: !input enable_tts
       speaker: !input speaker
       tts_engine: !input tts_engine
@@ -116,9 +111,8 @@ action:
       text: >
         {{ prompt }}
 
-        Đây là toàn bộ trạng thái thiết bị hiện tại:
+        Trạng thái nhà hiện tại:
         {{ states }}
-
     response_variable: ai_response
 
   # ===== MOBILE =====
@@ -126,7 +120,7 @@ action:
       - conditions:
           - "{{ enable_mobile }}"
         sequence:
-          - service: !input mobile_notify_service
+          - service: !input mobile_notify
             data:
               title: "🌙 Đến giờ đi ngủ"
               message: "{{ ai_response.response.speech.plain.speech }}"
