@@ -1,0 +1,164 @@
+blueprint:
+  name: AI Good Night Reminder (Zalo + Mobile + TTS)
+  domain: automation
+  author: GPT chỉnh theo style của m
+  description: Nhắc đi ngủ bằng AI + Zalo + Notification + Loa
+
+  input:
+    notify_time:
+      name: Thời gian nhắc
+      selector:
+        time: {}
+      default: "23:00:00"
+
+    # ===== AI =====
+    conversation_agent:
+      selector:
+        conversation_agent:
+
+    custom_prompt:
+      name: Prompt tùy chỉnh
+      selector:
+        text:
+          multiline: true
+      default: >
+        Bây giờ là 23h đêm.
+
+        Hãy đóng vai một người thân trong gia đình, nhắc mọi người trước khi đi ngủ.
+
+        Dựa vào trạng thái nhà thông minh:
+        - Nếu còn cửa mở hoặc đèn bật → nhắc nhẹ nhàng, tự nhiên
+        - Không liệt kê dạng danh sách
+        - Nói chuyện đời thường
+
+        Nếu mọi thứ ổn → khen nhẹ.
+
+        Kết thúc bằng lời chúc ngủ ngon ấm áp.
+
+    # ===== ZALO =====
+    enable_zalo:
+      selector:
+        boolean:
+      default: true
+
+    zalo_thread_id:
+      selector:
+        text: {}
+
+    zalo_account_selection:
+      selector:
+        text: {}
+
+    zalo_type:
+      selector:
+        select:
+          options:
+            - label: Cá nhân
+              value: "0"
+            - label: Nhóm
+              value: "1"
+      default: "1"
+
+    # ===== MOBILE =====
+    enable_mobile:
+      selector:
+        boolean:
+      default: true
+
+    mobile_notify_service:
+      name: Service notify mobile
+      selector:
+        text:
+      default: "notify.notify"
+
+    # ===== SPEAKER =====
+    enable_tts:
+      selector:
+        boolean:
+      default: false
+
+    speaker:
+      selector:
+        entity:
+          domain: media_player
+
+    tts_engine:
+      selector:
+        entity:
+          domain: tts
+
+    tts_volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+      default: 0.6
+
+trigger:
+  - platform: time
+    at: !input notify_time
+
+action:
+  - variables:
+      prompt: !input custom_prompt
+      enable_zalo: !input enable_zalo
+      enable_mobile: !input enable_mobile
+      enable_tts: !input enable_tts
+      speaker: !input speaker
+      tts_engine: !input tts_engine
+      tts_volume: !input tts_volume
+
+  # ===== AI =====
+  - service: conversation.process
+    data:
+      agent_id: !input conversation_agent
+      text: >
+        {{ prompt }}
+
+        Đây là toàn bộ trạng thái thiết bị hiện tại:
+        {{ states }}
+
+    response_variable: ai_response
+
+  # ===== MOBILE =====
+  - choose:
+      - conditions:
+          - "{{ enable_mobile }}"
+        sequence:
+          - service: !input mobile_notify_service
+            data:
+              title: "🌙 Đến giờ đi ngủ"
+              message: "{{ ai_response.response.speech.plain.speech }}"
+
+  # ===== ZALO =====
+  - choose:
+      - conditions:
+          - "{{ enable_zalo }}"
+        sequence:
+          - service: zalo_bot.send_message
+            data:
+              message: "{{ ai_response.response.speech.plain.speech }}"
+              thread_id: !input zalo_thread_id
+              account_selection: !input zalo_account_selection
+              type: !input zalo_type
+
+  # ===== TTS =====
+  - choose:
+      - conditions:
+          - "{{ enable_tts and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: !input speaker
+            data:
+              volume_level: "{{ tts_volume }}"
+
+          - service: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: !input speaker
+              message: "{{ ai_response.response.speech.plain.speech }}"
+
+mode: single
