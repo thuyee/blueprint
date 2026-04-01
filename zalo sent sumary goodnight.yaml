@@ -1,0 +1,246 @@
+blueprint:
+  name: Good Night AI to Zalo + Speaker (DLNA Stable Full)
+  domain: automation
+  author: smarthomeblack + GPT edit
+  description: Night reminder with AI + Zalo + TTS
+
+  input:
+    notify_time:
+      name: Notification Time
+      selector:
+        time: {}
+      default: "23:00:00"
+
+    # ===== ZALO =====
+    enable_zalo:
+      name: Enable Send to Zalo
+      selector:
+        boolean:
+      default: true
+
+    zalo_thread_id:
+      selector:
+        text: {}
+
+    zalo_account_selection:
+      selector:
+        text: {}
+
+    zalo_type:
+      selector:
+        select:
+          options:
+            - label: Personal
+              value: "0"
+            - label: Group
+              value: "1"
+      default: "1"
+
+    zalo_ttl:
+      selector:
+        number:
+          min: 0
+          max: 86400000
+          step: 1000
+      default: 0
+
+    # ===== AI =====
+    conversation_agent:
+      selector:
+        conversation_agent:
+
+    prompt:
+      selector:
+        text:
+          multiline: true
+      default: >
+        Bây giờ là 23h đêm.
+
+        Hãy đóng vai một người thân trong gia đình, nhắc mọi người trước khi đi ngủ.
+
+        Dựa vào trạng thái nhà:
+        - Nếu còn cửa hoặc cửa sổ đang mở → nhắc đóng lại
+        - Nếu còn đèn hoặc thiết bị đang bật → nhắc tắt đi
+
+        Không liệt kê dạng danh sách, hãy nói tự nhiên như người thật.
+
+        Nếu mọi thứ đã ổn thì khen nhẹ.
+
+        Cuối cùng chúc ngủ ngon ấm áp.
+
+    custom_footer:
+      selector:
+        text:
+          multiline: true
+      default: ""
+
+    # ===== SPEAKER =====
+    speaker:
+      selector:
+        entity:
+          domain: media_player
+      default: ""
+
+    # ===== ALARM =====
+    enable_alarm:
+      name: Enable Alarm
+      selector:
+        boolean:
+      default: false
+
+    alarm_url:
+      selector:
+        text:
+      default: ""
+
+    alarm_repeat:
+      selector:
+        number:
+          min: 1
+          max: 20
+      default: 1
+
+    alarm_duration:
+      selector:
+        number:
+          min: 1
+          max: 600
+      default: 5
+
+    alarm_volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+      default: 0.5
+
+    delay_before_tts:
+      selector:
+        number:
+          min: 0
+          max: 60
+      default: 2
+
+    # ===== TTS =====
+    enable_tts:
+      selector:
+        boolean:
+      default: true
+
+    tts_engine:
+      selector:
+        entity:
+          domain: tts
+
+    tts_volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+      default: 0.6
+
+trigger:
+  - platform: time
+    at: !input notify_time
+
+action:
+  - variables:
+      prompt: !input prompt
+      custom_footer: !input custom_footer
+      speaker: !input speaker
+      enable_zalo: !input enable_zalo
+      enable_alarm: !input enable_alarm
+      enable_tts: !input enable_tts
+      alarm_url: !input alarm_url
+      alarm_repeat: !input alarm_repeat
+      alarm_duration: !input alarm_duration
+      alarm_volume: !input alarm_volume
+      delay_before_tts: !input delay_before_tts
+      tts_engine: !input tts_engine
+      tts_volume: !input tts_volume
+
+  # ===== AI GOOD NIGHT =====
+  - service: conversation.process
+    data:
+      text: >
+        Time: {{ now().strftime('%H:%M') }}
+
+        Trạng thái nhà:
+        {{ states }}
+
+        {{ custom_footer }}
+
+        {{ prompt }}
+      agent_id: !input conversation_agent
+    response_variable: agent
+
+  # ===== SEND ZALO =====
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ enable_zalo }}"
+        sequence:
+          - service: zalo_bot.send_message
+            data:
+              message: "{{ agent.response.speech.plain.speech }}"
+              thread_id: !input zalo_thread_id
+              account_selection: !input zalo_account_selection
+              type: !input zalo_type
+              ttl: !input zalo_ttl
+
+  # ===== ALARM (GIỮ NGUYÊN) =====
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ enable_alarm and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ alarm_volume }}"
+
+          - repeat:
+              count: "{{ alarm_repeat }}"
+              sequence:
+                - service: media_player.play_media
+                  target:
+                    entity_id: "{{ speaker }}"
+                  data:
+                    media_content_id: "{{ alarm_url }}"
+                    media_content_type: music
+
+                - delay:
+                    seconds: "{{ alarm_duration }}"
+
+                - service: media_player.media_stop
+                  target:
+                    entity_id: "{{ speaker }}"
+
+                - delay: "00:00:01"
+
+  # ===== DELAY =====
+  - delay:
+      seconds: "{{ delay_before_tts }}"
+
+  # ===== TTS =====
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ enable_tts and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ tts_volume }}"
+
+          - service: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: "{{ speaker }}"
+              message: "{{ agent.response.speech.plain.speech }}"
+
+mode: single
