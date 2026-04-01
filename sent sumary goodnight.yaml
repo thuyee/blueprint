@@ -8,7 +8,7 @@ blueprint:
         time: {}
       default: "23:00:00"
 
-    # ===== MOBILE (GIỐNG CODE MẪU M) =====
+    # ===== MOBILE =====
     notify_device:
       name: Điện thoại nhận thông báo
       selector:
@@ -79,6 +79,10 @@ trigger:
     at: !input notify_time
 
 action:
+  - variables:
+      prompt: !input prompt
+      enable_zalo: !input enable_zalo
+
   # ===== AI =====
   - service: conversation.process
     data:
@@ -90,11 +94,11 @@ action:
            | selectattr('attributes.device_class','in',['door','window']) 
            | list }}
 
-        {{ !input prompt }}
+        {{ prompt }}
       agent_id: !input conversation_agent
     response_variable: agent
 
-  # ===== MOBILE (CHUẨN GIỐNG CODE MẪU M) =====
+  # ===== MOBILE =====
   - repeat:
       for_each: !input notify_device
       sequence:
@@ -109,7 +113,7 @@ action:
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ !input enable_zalo }}"
+            value_template: "{{ enable_zalo }}"
         sequence:
           - service: zalo_bot.send_message
             data:
