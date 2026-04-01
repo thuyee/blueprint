@@ -1,12 +1,9 @@
 blueprint:
-  name: AI Good Night Reminder (Full Control)
+  name: AI Good Night (Fix chuẩn device + optional)
   domain: automation
-  author: GPT fix chuẩn theo yêu cầu
-  description: Nhắc đi ngủ bằng AI + chọn mobile + Zalo + bật/tắt loa
 
   input:
     notify_time:
-      name: Thời gian nhắc
       selector:
         time: {}
       default: "23:00:00"
@@ -21,39 +18,36 @@ blueprint:
         text:
           multiline: true
       default: >
-        Bây giờ là 23h đêm.
+        Nhắc đi ngủ tự nhiên, không liệt kê, có chúc ngủ ngon.
 
-        Hãy đóng vai người thân trong gia đình, nhắc mọi người trước khi ngủ.
-        Nếu còn cửa mở hoặc đèn bật → nhắc tự nhiên, KHÔNG liệt kê.
-        Nếu ổn rồi → khen nhẹ.
-        Cuối cùng chúc ngủ ngon.
-
-    # ===== MOBILE =====
+    # ===== MOBILE (CHỌN THEO DEVICE) =====
     enable_mobile:
-      name: Bật thông báo điện thoại
       selector:
         boolean:
       default: true
 
-    mobile_notify:
-      name: Chọn notify điện thoại
+    mobile_device:
+      name: Chọn điện thoại
       selector:
-        entity:
-          domain: notify
+        device:
+          integration: mobile_app
+      default: ""
 
     # ===== ZALO =====
     enable_zalo:
       selector:
         boolean:
-      default: true
+      default: false
 
     zalo_thread_id:
       selector:
         text: {}
+      default: ""
 
     zalo_account_selection:
       selector:
         text: {}
+      default: ""
 
     zalo_type:
       selector:
@@ -67,7 +61,6 @@ blueprint:
 
     # ===== SPEAKER =====
     enable_tts:
-      name: Bật phát loa
       selector:
         boolean:
       default: false
@@ -76,18 +69,19 @@ blueprint:
       selector:
         entity:
           domain: media_player
+      default: ""
 
     tts_engine:
       selector:
         entity:
           domain: tts
+      default: ""
 
     tts_volume:
       selector:
         number:
           min: 0
           max: 1
-          step: 0.05
       default: 0.6
 
 trigger:
@@ -96,13 +90,9 @@ trigger:
 
 action:
   - variables:
-      prompt: !input prompt
-      enable_mobile: !input enable_mobile
-      enable_zalo: !input enable_zalo
-      enable_tts: !input enable_tts
+      mobile_device: !input mobile_device
       speaker: !input speaker
       tts_engine: !input tts_engine
-      tts_volume: !input tts_volume
 
   # ===== AI =====
   - service: conversation.process
@@ -111,28 +101,29 @@ action:
       text: >
         {{ prompt }}
 
-        Trạng thái nhà hiện tại:
+        Trạng thái:
         {{ states }}
-    response_variable: ai_response
+    response_variable: ai
 
   # ===== MOBILE =====
   - choose:
       - conditions:
-          - "{{ enable_mobile }}"
+          - "{{ mobile_device != '' and is_state('input_boolean.dummy','off') == false or true }}"
         sequence:
-          - service: !input mobile_notify
-            data:
-              title: "🌙 Đến giờ đi ngủ"
-              message: "{{ ai_response.response.speech.plain.speech }}"
+          - device_id: !input mobile_device
+            domain: mobile_app
+            type: notify
+            title: "🌙 Đi ngủ thôi"
+            message: "{{ ai.response.speech.plain.speech }}"
 
   # ===== ZALO =====
   - choose:
       - conditions:
-          - "{{ enable_zalo }}"
+          - "{{ !input enable_zalo and !input zalo_thread_id != '' }}"
         sequence:
           - service: zalo_bot.send_message
             data:
-              message: "{{ ai_response.response.speech.plain.speech }}"
+              message: "{{ ai.response.speech.plain.speech }}"
               thread_id: !input zalo_thread_id
               account_selection: !input zalo_account_selection
               type: !input zalo_type
@@ -140,19 +131,19 @@ action:
   # ===== TTS =====
   - choose:
       - conditions:
-          - "{{ enable_tts and speaker != '' }}"
+          - "{{ !input enable_tts and speaker != '' and tts_engine != '' }}"
         sequence:
           - service: media_player.volume_set
             target:
               entity_id: !input speaker
             data:
-              volume_level: "{{ tts_volume }}"
+              volume_level: !input tts_volume
 
           - service: tts.speak
             target:
               entity_id: !input tts_engine
             data:
               media_player_entity_id: !input speaker
-              message: "{{ ai_response.response.speech.plain.speech }}"
+              message: "{{ ai.response.speech.plain.speech }}"
 
 mode: single
