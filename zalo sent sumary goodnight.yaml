@@ -1,8 +1,8 @@
 blueprint:
-  name: Good Night AI to Zalo + Mobile + Speaker (DLNA Stable Full)
+  name: Good Night AI to Zalo + Mobile
   domain: automation
   author: smarthomeblack + GPT edit
-  description: Night reminder with AI + Zalo + Mobile + TTS
+  description: Night reminder with AI + Zalo + Mobile
 
   input:
     notify_time:
@@ -72,7 +72,7 @@ blueprint:
         Nếu còn cửa hoặc cửa sổ đang mở → nhắc đóng lại.
         Nếu còn đèn hoặc thiết bị đang bật → nhắc tắt đi.
 
-        Không liệt kê dạng danh sách. Hãy nói tự nhiên như người thật.
+        Không liệt kê dạng danh sách. Nói tự nhiên như người thật.
 
         Nếu mọi thứ đã ổn thì khen nhẹ.
 
@@ -84,72 +84,6 @@ blueprint:
           multiline: true
       default: ""
 
-    # ===== SPEAKER =====
-    speaker:
-      selector:
-        entity:
-          domain: media_player
-      default: ""
-
-    # ===== ALARM =====
-    enable_alarm:
-      name: Enable Alarm
-      selector:
-        boolean:
-      default: false
-
-    alarm_url:
-      selector:
-        text:
-      default: ""
-
-    alarm_repeat:
-      selector:
-        number:
-          min: 1
-          max: 20
-      default: 1
-
-    alarm_duration:
-      selector:
-        number:
-          min: 1
-          max: 600
-      default: 5
-
-    alarm_volume:
-      selector:
-        number:
-          min: 0
-          max: 1
-      default: 0.5
-
-    delay_before_tts:
-      selector:
-        number:
-          min: 0
-          max: 60
-      default: 2
-
-    # ===== TTS =====
-    enable_tts:
-      selector:
-        boolean:
-      default: true
-
-    tts_engine:
-      selector:
-        entity:
-          domain: tts
-
-    tts_volume:
-      selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.05
-      default: 0.6
-
 trigger:
   - platform: time
     at: !input notify_time
@@ -158,19 +92,9 @@ action:
   - variables:
       prompt: !input prompt
       custom_footer: !input custom_footer
-      speaker: !input speaker
       enable_zalo: !input enable_zalo
-      enable_alarm: !input enable_alarm
-      enable_tts: !input enable_tts
-      alarm_url: !input alarm_url
-      alarm_repeat: !input alarm_repeat
-      alarm_duration: !input alarm_duration
-      alarm_volume: !input alarm_volume
-      delay_before_tts: !input delay_before_tts
-      tts_engine: !input tts_engine
-      tts_volume: !input tts_volume
 
-  # ===== AI GOOD NIGHT =====
+  # ===== AI =====
   - service: conversation.process
     data:
       text: >
@@ -185,7 +109,7 @@ action:
       agent_id: !input conversation_agent
     response_variable: agent
 
-  # ===== MOBILE PUSH =====
+  # ===== MOBILE PUSH (GIỐNG CODE GỐC) =====
   - repeat:
       for_each: !input mobile_devices
       sequence:
@@ -195,7 +119,7 @@ action:
           title: "🌙 Đến giờ đi ngủ"
           message: "{{ agent.response.speech.plain.speech }}"
 
-  # ===== SEND ZALO =====
+  # ===== ZALO =====
   - choose:
       - conditions:
           - condition: template
@@ -208,59 +132,5 @@ action:
               account_selection: !input zalo_account_selection
               type: !input zalo_type
               ttl: !input zalo_ttl
-
-  # ===== ALARM LOOP =====
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ enable_alarm and speaker != '' }}"
-        sequence:
-          - service: media_player.volume_set
-            target:
-              entity_id: "{{ speaker }}"
-            data:
-              volume_level: "{{ alarm_volume }}"
-
-          - repeat:
-              count: "{{ alarm_repeat }}"
-              sequence:
-                - service: media_player.play_media
-                  target:
-                    entity_id: "{{ speaker }}"
-                  data:
-                    media_content_id: "{{ alarm_url }}"
-                    media_content_type: music
-
-                - delay:
-                    seconds: "{{ alarm_duration }}"
-
-                - service: media_player.media_stop
-                  target:
-                    entity_id: "{{ speaker }}"
-
-                - delay: "00:00:01"
-
-  # ===== DELAY =====
-  - delay:
-      seconds: "{{ delay_before_tts }}"
-
-  # ===== TTS =====
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ enable_tts and speaker != '' }}"
-        sequence:
-          - service: media_player.volume_set
-            target:
-              entity_id: "{{ speaker }}"
-            data:
-              volume_level: "{{ tts_volume }}"
-
-          - service: tts.speak
-            target:
-              entity_id: !input tts_engine
-            data:
-              media_player_entity_id: "{{ speaker }}"
-              message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
