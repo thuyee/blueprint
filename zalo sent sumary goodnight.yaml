@@ -1,8 +1,8 @@
 blueprint:
-  name: Good Night AI to Zalo + Speaker (DLNA Stable Full)
+  name: Good Night AI to Zalo + Mobile + Speaker (DLNA Stable Full)
   domain: automation
   author: smarthomeblack + GPT edit
-  description: Night reminder with AI + Zalo + TTS
+  description: Night reminder with AI + Zalo + Mobile + TTS
 
   input:
     notify_time:
@@ -10,6 +10,15 @@ blueprint:
       selector:
         time: {}
       default: "23:00:00"
+
+    # ===== MOBILE =====
+    mobile_devices:
+      name: Chọn điện thoại nhận thông báo
+      selector:
+        device:
+          integration: mobile_app
+          multiple: true
+      default: []
 
     # ===== ZALO =====
     enable_zalo:
@@ -21,10 +30,12 @@ blueprint:
     zalo_thread_id:
       selector:
         text: {}
+      default: ""
 
     zalo_account_selection:
       selector:
         text: {}
+      default: ""
 
     zalo_type:
       selector:
@@ -58,15 +69,14 @@ blueprint:
 
         Hãy đóng vai một người thân trong gia đình, nhắc mọi người trước khi đi ngủ.
 
-        Dựa vào trạng thái nhà:
-        - Nếu còn cửa hoặc cửa sổ đang mở → nhắc đóng lại
-        - Nếu còn đèn hoặc thiết bị đang bật → nhắc tắt đi
+        Nếu còn cửa hoặc cửa sổ đang mở → nhắc đóng lại.
+        Nếu còn đèn hoặc thiết bị đang bật → nhắc tắt đi.
 
-        Không liệt kê dạng danh sách, hãy nói tự nhiên như người thật.
+        Không liệt kê dạng danh sách. Hãy nói tự nhiên như người thật.
 
         Nếu mọi thứ đã ổn thì khen nhẹ.
 
-        Cuối cùng chúc ngủ ngon ấm áp.
+        Cuối cùng chúc ngủ ngon ấm áp cho cả gia đình.
 
     custom_footer:
       selector:
@@ -175,6 +185,16 @@ action:
       agent_id: !input conversation_agent
     response_variable: agent
 
+  # ===== MOBILE PUSH =====
+  - repeat:
+      for_each: !input mobile_devices
+      sequence:
+        - device_id: "{{ repeat.item }}"
+          domain: mobile_app
+          type: notify
+          title: "🌙 Đến giờ đi ngủ"
+          message: "{{ agent.response.speech.plain.speech }}"
+
   # ===== SEND ZALO =====
   - choose:
       - conditions:
@@ -189,7 +209,7 @@ action:
               type: !input zalo_type
               ttl: !input zalo_ttl
 
-  # ===== ALARM (GIỮ NGUYÊN) =====
+  # ===== ALARM LOOP =====
   - choose:
       - conditions:
           - condition: template
