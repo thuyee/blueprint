@@ -1,7 +1,7 @@
 blueprint:
-  name: Good Night AI to Zalo + Mobile
+  name: Good Night AI to Zalo + Mobile (Stable)
   domain: automation
-  author: smarthomeblack + GPT edit
+  author: smarthomeblack + GPT fix chuẩn
   description: Night reminder with AI + Zalo + Mobile
 
   input:
@@ -12,11 +12,11 @@ blueprint:
       default: "23:00:00"
 
     # ===== MOBILE =====
-    mobile_devices:
-      name: Chọn điện thoại nhận thông báo
+    mobile_notify:
+      name: Chọn notify điện thoại
       selector:
-        device:
-          integration: mobile_app
+        entity:
+          domain: notify
           multiple: true
       default: []
 
@@ -101,7 +101,10 @@ action:
         Time: {{ now().strftime('%H:%M') }}
 
         Trạng thái nhà:
-        {{ states }}
+        {{ states.light | list }}
+        {{ states.binary_sensor 
+           | selectattr('attributes.device_class','in',['door','window']) 
+           | list }}
 
         {{ custom_footer }}
 
@@ -109,15 +112,14 @@ action:
       agent_id: !input conversation_agent
     response_variable: agent
 
-  # ===== MOBILE PUSH (GIỐNG CODE GỐC) =====
+  # ===== MOBILE PUSH =====
   - repeat:
-      for_each: !input mobile_devices
+      for_each: !input mobile_notify
       sequence:
-        - device_id: "{{ repeat.item }}"
-          domain: mobile_app
-          type: notify
-          title: "🌙 Đến giờ đi ngủ"
-          message: "{{ agent.response.speech.plain.speech }}"
+        - service: "{{ repeat.item }}"
+          data:
+            title: "🌙 Đến giờ đi ngủ"
+            message: "{{ agent.response.speech.plain.speech }}"
 
   # ===== ZALO =====
   - choose:
