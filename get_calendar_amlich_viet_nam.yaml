@@ -119,59 +119,53 @@ fields:
     required: false
 sequence:
   - variables:
-      start: "{{ (start_date | as_datetime) if start_date else now() }}"
-  - variables:
-      range_start: >-
+      response: >-
+        {% set start_dt = (start_date | as_datetime) if start_date else now() %}
+        {% set length = time_period_length | int(1) %}
         {% if time_period_type == 'thang' %}
-          {{ start.replace(day=1) }}
-        {% else %}
-          {{ start }}
-        {% endif %}
-      range_end: >-
-        {% if time_period_type == 'ngay' %}
-          {{ start + timedelta(days = time_period_length | int(1)) }}
-        {% else %}
-          {% set ns = namespace(d = start.replace(day=1)) %}
-          {% for i in range(time_period_length | int(1)) %}
-            {% set ns.d = (ns.d + timedelta(days=32)).replace(day=1) %}
+          {% set range_start_dt = as_datetime(start_dt.strftime('%Y-%m-01')) %}
+          {% set ns_m = namespace(d = range_start_dt) %}
+          {% for i in range(length) %}
+            {% set ns_m.d = as_datetime((ns_m.d + timedelta(days=32)).strftime('%Y-%m-01')) %}
           {% endfor %}
-          {{ ns.d }}
+          {% set range_end_dt = ns_m.d %}
+        {% else %}
+          {% set range_start_dt = start_dt %}
+          {% set range_end_dt = start_dt + timedelta(days=length) %}
         {% endif %}
-  - variables:
-      start_offset_days: "{{ ((range_start | as_datetime).date() - now().date()).days }}"
-      end_offset_days: "{{ ((range_end | as_datetime).date() - now().date()).days }}"
-  - variables:
-      response:
-        khoang_thoi_gian:
-          tu_ngay: "{{ (range_start | as_datetime).date() }}"
-          den_ngay: "{{ ((range_end | as_datetime).date() - timedelta(days=1)) }}"
-        events: >-
-          {% set ns = namespace(list=[]) %}
-          {% for st in states.sensor if
-             (marker_attribute_lunar in st.attributes or marker_attribute_solar in st.attributes)
-             and st.state not in ['unknown', 'unavailable', 'none', '']
-             and st.state | is_number %}
-            {% set con_lai = st.state | int %}
-            {% if con_lai >= start_offset_days and con_lai < end_offset_days %}
-              {% set loai = 'am_lich' if marker_attribute_lunar in st.attributes else 'duong_lich' %}
-              {% set ns.list = ns.list + [ {
-                'ten_su_kien': st.name,
-                'entity_id': st.entity_id,
-                'loai_su_kien': loai,
-                'con_lai_so_ngay': con_lai,
-                'ngay_du_kien': (now().date() + timedelta(days=con_lai)) | string,
-                'ngay_duong_lich_su_kien': st.attributes.get('ngay_duong_lich_su_kien'),
-                'ngay_am_lich_su_kien': st.attributes.get('ngay_am_lich_su_kien'),
-                'ngay_am_lich_hien_tai': st.attributes.get('ngay_am_lich_hien_tai'),
-                'ngay_duong_lich_hien_tai': st.attributes.get('ngay_duong_lich_hien_tai'),
-                'thu_su_kien': st.attributes.get('thu_su_kien'),
-                'nam_can_chi_su_kien': st.attributes.get('nam_can_chi_su_kien'),
-                'so_nam': st.attributes.get('so_nam'),
-                'so_tuoi': st.attributes.get('so_tuoi'),
-                'chi_tiet': st.attributes.get('chi_tiet'),
-              } ] %}
-            {% endif %}
-          {% endfor %}
-          {{ ns.list | sort(attribute='con_lai_so_ngay') }}
+        {% set start_offset_days = (range_start_dt.date() - now().date()).days %}
+        {% set end_offset_days = (range_end_dt.date() - now().date()).days %}
+        {% set ns = namespace(list=[]) %}
+        {% for st in states.sensor if
+           (marker_attribute_lunar in st.attributes or marker_attribute_solar in st.attributes)
+           and st.state not in ['unknown', 'unavailable', 'none', '']
+           and st.state | is_number %}
+          {% set con_lai = st.state | int %}
+          {% if con_lai >= start_offset_days and con_lai < end_offset_days %}
+            {% set loai = 'am_lich' if marker_attribute_lunar in st.attributes else 'duong_lich' %}
+            {% set ns.list = ns.list + [ {
+              'ten_su_kien': st.name,
+              'entity_id': st.entity_id,
+              'loai_su_kien': loai,
+              'con_lai_so_ngay': con_lai,
+              'ngay_du_kien': (now().date() + timedelta(days=con_lai)) | string,
+              'ngay_duong_lich_su_kien': st.attributes.get('ngay_duong_lich_su_kien'),
+              'ngay_am_lich_su_kien': st.attributes.get('ngay_am_lich_su_kien'),
+              'ngay_am_lich_hien_tai': st.attributes.get('ngay_am_lich_hien_tai'),
+              'ngay_duong_lich_hien_tai': st.attributes.get('ngay_duong_lich_hien_tai'),
+              'thu_su_kien': st.attributes.get('thu_su_kien'),
+              'nam_can_chi_su_kien': st.attributes.get('nam_can_chi_su_kien'),
+              'so_nam': st.attributes.get('so_nam'),
+              'so_tuoi': st.attributes.get('so_tuoi'),
+              'chi_tiet': st.attributes.get('chi_tiet'),
+            } ] %}
+          {% endif %}
+        {% endfor %}
+        {{ {
+          'tu_ngay': range_start_dt.date() | string,
+          'den_ngay': (range_end_dt.date() - timedelta(days=1)) | string,
+          'so_su_kien_tim_thay': ns.list | count,
+          'events': ns.list | sort(attribute='con_lai_so_ngay'),
+        } }}
   - stop: ""
     response_variable: response
