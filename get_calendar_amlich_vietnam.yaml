@@ -1,0 +1,177 @@
+blueprint:
+  name: Tra cứu sự kiện Âm Dương lịch (am-lich-viet-nam)
+  author: custom
+  description: |-
+    # Tool tra cứu sự kiện Âm/Dương lịch cho Voice Assistant
+
+    Tích hợp "Âm lịch Việt Nam" (khaisilk1910/am-lich-viet-nam) không tạo calendar
+    entity mà tạo **1 sensor riêng cho mỗi sự kiện** (VD: `sensor.gio_ong_noi`),
+    trong đó state là **số ngày còn lại** đến lần diễn ra kế tiếp. Vì vậy blueprint
+    gốc dùng `calendar.get_events` không dùng được. Blueprint này quét tất cả các
+    sensor có attribute đặc trưng của tích hợp trên, rồi lọc ra sự kiện rơi vào
+    khoảng thời gian được yêu cầu.
+
+    ## Cài đặt
+    - Không cần chọn calendar entity. Script bắt cả 2 loại sự kiện: sự kiện Âm
+      lịch (giỗ...) nhận diện qua attribute `ngay_duong_lich_hien_tai`, sự kiện
+      Dương lịch (sinh nhật, ngày cưới...) nhận diện qua attribute
+      `ngay_am_lich_hien_tai`. Nếu bản tích hợp của bạn đặt tên attribute khác,
+      đổi lại trong mục "Cài đặt nâng cao".
+    - Sau khi tạo Script, vào Settings → Voice assistants → Expose (hoặc trong màn
+      hình Script) để **expose Script cho Assist**.
+    - Sau khi lưu Script, bấm 3 chấm ở góc phải → "Edit in YAML", xoá dòng
+      `description: ...` do UI tự sinh ra để khôi phục mô tả mặc định — giúp LLM
+      hiểu đúng mục đích của script khi chọn tool.
+    - Không đổi tên mặc định của Script.
+
+    ## Giới hạn
+    Vì sensor chỉ lưu "số ngày còn lại đến lần kế tiếp" (luôn ≥ 0, tự nhảy sang
+    năm sau ngay khi qua ngày), script chỉ tìm được sự kiện **sắp tới**, không tìm
+    lại được sự kiện đã diễn ra trong quá khứ của tháng đang hỏi.
+  domain: script
+  homeassistant:
+    min_version: 2024.12.0
+  input:
+    advanced_settings:
+      name: Cài đặt nâng cao
+      icon: mdi:cog
+      description: Tùy chỉnh cách nhận diện sensor sự kiện của tích hợp Âm lịch Việt Nam.
+      collapsed: true
+      input:
+        marker_attribute_lunar:
+          name: Attribute nhận diện sự kiện Âm lịch
+          description: >-
+            Tên attribute chỉ xuất hiện trên sensor sự kiện có nguồn gốc Âm lịch
+            (VD: giỗ) — đây là ngày Dương lịch quy đổi của năm hiện tại.
+          selector:
+            text: {}
+          default: ngay_duong_lich_hien_tai
+        marker_attribute_solar:
+          name: Attribute nhận diện sự kiện Dương lịch
+          description: >-
+            Tên attribute chỉ xuất hiện trên sensor sự kiện có nguồn gốc Dương
+            lịch (VD: sinh nhật, ngày cưới) — đây là ngày Âm lịch quy đổi của
+            năm hiện tại.
+          selector:
+            text: {}
+          default: ngay_am_lich_hien_tai
+    prompt_settings:
+      name: Prompt settings cho LLM
+      icon: mdi:robot
+      description: Tinh chỉnh mô tả prompt cho từng field nếu LLM bạn dùng hiểu sai ý.
+      collapsed: true
+      input:
+        time_period_type_prompt:
+          name: Time Period Type Prompt
+          description: Prompt giúp AI xác định loại khoảng thời gian (ngày hoặc tháng) [Chỉ dành cho người]
+          selector:
+            text:
+              multiline: true
+          default: |-
+            ngay (theo số ngày) hoặc thang (theo số tháng, tính trọn tháng bắt đầu từ ngày 1)
+        time_period_length_prompt:
+          name: Time Period Length Prompt
+          description: Prompt giúp AI xác định độ dài khoảng thời gian [Chỉ dành cho người]
+          selector:
+            text:
+              multiline: true
+          default: |-
+            Độ dài tính theo ngày (nếu loại là ngay) hoặc theo tháng (nếu loại là thang). VD hỏi "tháng này" thì loại=thang, độ dài=1
+        date_prompt:
+          name: Date Prompt
+          description: Prompt giúp AI xác định ngày bắt đầu [Chỉ dành cho người]
+          selector:
+            text:
+              multiline: true
+          default: |-
+            Ngày bắt đầu tra cứu (YYYY-MM-DD). Mặc định là hôm nay nếu không có.
+
+mode: parallel
+max_exceeded: silent
+description: Tra cứu các sự kiện âm lịch/dương lịch (giỗ, sinh nhật, ngày cưới,...) sắp diễn ra trong một khoảng thời gian
+variables:
+  version: 20260806
+  marker_attribute_lunar: !input marker_attribute_lunar
+  marker_attribute_solar: !input marker_attribute_solar
+fields:
+  time_period_type:
+    name: Loại khoảng thời gian
+    description: !input time_period_type_prompt
+    selector:
+      select:
+        options:
+          - ngay
+          - thang
+    required: true
+  time_period_length:
+    name: Độ dài khoảng thời gian
+    description: !input time_period_length_prompt
+    selector:
+      number:
+        min: 1
+        max: 366
+    required: true
+  start_date:
+    name: Ngày bắt đầu
+    description: !input date_prompt
+    selector:
+      date: {}
+    required: false
+sequence:
+  - variables:
+      start: "{{ (start_date | as_datetime) if start_date else now() }}"
+  - variables:
+      range_start: >-
+        {% if time_period_type == 'thang' %}
+          {{ start.replace(day=1) }}
+        {% else %}
+          {{ start }}
+        {% endif %}
+      range_end: >-
+        {% if time_period_type == 'ngay' %}
+          {{ start + timedelta(days = time_period_length | int(1)) }}
+        {% else %}
+          {% set ns = namespace(d = start.replace(day=1)) %}
+          {% for i in range(time_period_length | int(1)) %}
+            {% set ns.d = (ns.d + timedelta(days=32)).replace(day=1) %}
+          {% endfor %}
+          {{ ns.d }}
+        {% endif %}
+  - variables:
+      start_offset_days: "{{ ((range_start | as_datetime).date() - now().date()).days }}"
+      end_offset_days: "{{ ((range_end | as_datetime).date() - now().date()).days }}"
+  - variables:
+      response:
+        khoang_thoi_gian:
+          tu_ngay: "{{ (range_start | as_datetime).date() }}"
+          den_ngay: "{{ ((range_end | as_datetime).date() - timedelta(days=1)) }}"
+        events: >-
+          {% set ns = namespace(list=[]) %}
+          {% for st in states.sensor if
+             (marker_attribute_lunar in st.attributes or marker_attribute_solar in st.attributes)
+             and st.state not in ['unknown', 'unavailable', 'none', '']
+             and st.state | is_number %}
+            {% set con_lai = st.state | int %}
+            {% if con_lai >= start_offset_days and con_lai < end_offset_days %}
+              {% set loai = 'am_lich' if marker_attribute_lunar in st.attributes else 'duong_lich' %}
+              {% set ns.list = ns.list + [ {
+                'ten_su_kien': st.name,
+                'entity_id': st.entity_id,
+                'loai_su_kien': loai,
+                'con_lai_so_ngay': con_lai,
+                'ngay_du_kien': (now().date() + timedelta(days=con_lai)) | string,
+                'ngay_duong_lich_su_kien': st.attributes.get('ngay_duong_lich_su_kien'),
+                'ngay_am_lich_su_kien': st.attributes.get('ngay_am_lich_su_kien'),
+                'ngay_am_lich_hien_tai': st.attributes.get('ngay_am_lich_hien_tai'),
+                'ngay_duong_lich_hien_tai': st.attributes.get('ngay_duong_lich_hien_tai'),
+                'thu_su_kien': st.attributes.get('thu_su_kien'),
+                'nam_can_chi_su_kien': st.attributes.get('nam_can_chi_su_kien'),
+                'so_nam': st.attributes.get('so_nam'),
+                'so_tuoi': st.attributes.get('so_tuoi'),
+                'chi_tiet': st.attributes.get('chi_tiet'),
+              } ] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.list | sort(attribute='con_lai_so_ngay') }}
+  - stop: ""
+    response_variable: response
