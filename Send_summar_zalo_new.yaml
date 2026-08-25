@@ -100,7 +100,8 @@ blueprint:
     news_search_agent:
       name: "Agent 2 - Chuyên tìm tin tức"
       description: >-
-        Agent này được gọi RIÊNG để tìm và tóm tắt tin tức trước, sau đó kết quả mới đưa cho Agent
+        Agent này được gọi RIÊNG để tìm và tóm tắt tin tức bằng công cụ
+        "Perform Google Search" trước, sau đó kết quả mới đưa cho Agent
         chính soạn bản tin hoàn chỉnh. Agent chính KHÔNG tự tìm kiếm nữa —
         chỉ nhận tin có sẵn để viết văn. Nếu để trống, phần tin tức sẽ được
         bỏ qua hoàn toàn (dù bật Enable Daily Hot News).
@@ -280,7 +281,7 @@ variables:
     {% set today = now().strftime('%d/%m/%Y') %}
     {% for cat in news_categories %}
       {% if cat == 'weather' %}
-        {% set ns.lines = ns.lines + ['🌧️ Thời tiết/thiên tai: "tin thời tiết ở miền trung, bão áp thấp nhiệt đới thời tiết nguy hiểm Việt Nam hôm nay ' ~ today ~ '"'] %}
+        {% set ns.lines = ns.lines + ['🌧️ Thời tiết/thiên tai: "tin bão áp thấp nhiệt đới thời tiết nguy hiểm Việt Nam hôm nay ' ~ today ~ '"'] %}
       {% elif cat == 'economy' %}
         {% set ns.lines = ns.lines + ['💰 Kinh tế: "tin kinh tế tỷ giá giá vàng chứng khoán Việt Nam hôm nay ' ~ today ~ '"'] %}
       {% elif cat == 'highlights' %}
@@ -349,12 +350,13 @@ action:
           agent_id: "{{ news_search_agent }}"
           language: vi
           text: >-
-            Bạn là trợ lý TÌM KIẾM TIN TỨC. Để tra cứu tin THẬT, KHÔNG bịa tin, KHÔNG dùng kiến thức
+            Bạn là trợ lý TÌM KIẾM TIN TỨC. Dùng công cụ "Perform Google
+            Search" để tra cứu tin THẬT, KHÔNG bịa tin, KHÔNG dùng kiến thức
             cũ đã huấn luyện. Chỉ ưu tiên tin trong {{ news_lookback_hours }}
             giờ gần nhất, từ báo chí chính thống Việt Nam (VnExpress, Tuổi
             Trẻ, Thanh Niên, Znews, VTV, TTXVN...).
 
-            Thực hiện tìm kiếm riêng cho từng
+            Thực hiện MỘT lượt gọi "Perform Google Search" riêng cho từng
             chủ đề bên dưới, sau đó chọn 1 tin đáng chú ý nhất mỗi chủ đề:
 
             {{ news_queries }}
@@ -415,28 +417,28 @@ action:
         
         1 câu chào buổi sáng ngắn gọn, truyền cảm hứng.
 
-        -THỜI TIẾT
+        THỜI TIẾT
         Nhận xét thời tiết/môi trường, gợi ý trang phục, cảnh báo an toàn
         nếu chỉ số bất thường (CO cao, mưa lớn, AQI xấu...).
 
-        -LỊCH & CÔNG VIỆC
+        LỊCH & CÔNG VIỆC
         (chỉ thêm mục này nếu có lịch hoặc todo) Liệt kê theo thứ tự thời
         gian, việc quá hạn nhắc riêng, sự kiện đặc biệt (sinh nhật...) nêu
         bật.
 
-        -TIN TỨC HÔM NAY
+        TIN TỨC HÔM NAY
         (chỉ thêm mục này nếu có tin) Mỗi tin 1-2 câu, giữ emoji chủ đề ở
         đầu mỗi tin, mỗi tin xuống dòng riêng.
 
-        
+       
         1 câu chúc kết thúc ngắn gọn.
 
         # ĐỊNH DẠNG ĐẦU RA
         - Tiếng Việt tự nhiên, câu văn mạch lạc, đúng ngữ pháp.
-        - Giữ ĐÚNG format tiêu đề "TÊN MỤC" viết hoa như trên, tô đỏ, xuống dòng
+        - Giữ ĐÚNG format tiêu đề "TÊN MỤC" viết hoa như trên, xuống dòng
           ngay sau tiêu đề, rồi mới đến nội dung.
         - Giữa các mục cách nhau 1 dòng trống để dễ đọc trên Zalo.
-        - Trong mỗi mục, viết đoạn văn ngắn hoặc mỗi ý 1 dòng — hạn chế dùng
+        - Trong mỗi mục, viết đoạn văn ngắn hoặc mỗi ý 1 dòng — KHÔNG dùng
           markdown (không *, #, dấu gạch đầu dòng "-") vì bản tin còn được
           đọc qua TTS, chỉ dùng emoji và xuống dòng để phân đoạn.
         - Độ dài vừa đủ, súc tích, ưu tiên chất lượng hơn số lượng.
