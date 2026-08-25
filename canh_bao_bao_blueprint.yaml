@@ -85,7 +85,7 @@ action:
           device_id: !input notify_device
         data:
           title: "Cảnh báo bão"
-          message: "{{ ket_qua.message }}"
+          message: "{{ ket_qua.message_short }}"
 
       - action: zalo_bot.send_message
         data:
