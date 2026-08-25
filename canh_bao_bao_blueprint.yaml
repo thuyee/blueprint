@@ -1,5 +1,5 @@
 blueprint:
-  name: Cảnh báo bão KTTV -> Zalo (Multi Form UI) / Mobile
+  name: Cảnh báo bão KTTV -> Zalo (Multi UI Chuẩn) / Mobile
   description: >
     Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
     format bằng AI agent và gửi qua nhiều Zalo + thông báo điện thoại.
@@ -36,38 +36,105 @@ blueprint:
           integration: mobile_app
           multiple: true
 
-    zalo_list:
-      name: Danh sách Zalo nhận tin
-      description: Bấm nút "Thêm mục" bên dưới để thêm người/nhóm Zalo nhận tin.
-      default:
-        - thread_id: "1058896116335801995"
-          account: "+84868837123"
-          type: "1"
+    # ZALO 1
+    zalo_1_thread_id:
+      name: "Zalo 1 - Thread ID"
+      default: "1058896116335801995"
       selector:
-        object:
-          multiple: true
-          fields:
-            thread_id:
-              name: Thread ID
-              description: ID của người dùng hoặc nhóm Zalo
-              selector:
-                text: {}
-            account:
-              name: Số điện thoại gửi (Account)
-              default: "+84868837123"
-              selector:
-                text: {}
-            type:
-              name: Loại Thread
-              default: "1"
-              selector:
-                select:
-                  mode: list
-                  options:
-                    - label: "Group (nhóm)"
-                      value: "1"
-                    - label: "User (cá nhân)"
-                      value: "0"
+        text: {}
+
+    zalo_1_account:
+      name: "Zalo 1 - SĐT Tài khoản gửi"
+      default: "+84868837123"
+      selector:
+        text: {}
+
+    zalo_1_type:
+      name: "Zalo 1 - Loại Thread"
+      default: "1"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "Group (nhóm)"
+              value: "1"
+            - label: "User (cá nhân)"
+              value: "0"
+
+    # ZALO 2
+    zalo_2_thread_id:
+      name: "Zalo 2 - Thread ID (Bỏ trống nếu không dùng)"
+      default: ""
+      selector:
+        text: {}
+
+    zalo_2_account:
+      name: "Zalo 2 - SĐT Tài khoản gửi"
+      default: "+84868837123"
+      selector:
+        text: {}
+
+    zalo_2_type:
+      name: "Zalo 2 - Loại Thread"
+      default: "0"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "Group (nhóm)"
+              value: "1"
+            - label: "User (cá nhân)"
+              value: "0"
+
+    # ZALO 3
+    zalo_3_thread_id:
+      name: "Zalo 3 - Thread ID (Bỏ trống nếu không dùng)"
+      default: ""
+      selector:
+        text: {}
+
+    zalo_3_account:
+      name: "Zalo 3 - SĐT Tài khoản gửi"
+      default: "+84868837123"
+      selector:
+        text: {}
+
+    zalo_3_type:
+      name: "Zalo 3 - Loại Thread"
+      default: "0"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "Group (nhóm)"
+              value: "1"
+            - label: "User (cá nhân)"
+              value: "0"
+
+    # ZALO 4
+    zalo_4_thread_id:
+      name: "Zalo 4 - Thread ID (Bỏ trống nếu không dùng)"
+      default: ""
+      selector:
+        text: {}
+
+    zalo_4_account:
+      name: "Zalo 4 - SĐT Tài khoản gửi"
+      default: "+84868837123"
+      selector:
+        text: {}
+
+    zalo_4_type:
+      name: "Zalo 4 - Loại Thread"
+      default: "0"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "Group (nhóm)"
+              value: "1"
+            - label: "User (cá nhân)"
+              value: "0"
 
 trigger:
   - trigger: time_pattern
@@ -93,9 +160,15 @@ action:
           title: "Cảnh báo bão"
           message: "{{ ket_qua.message_short }}"
 
-      # 2. Tự động lặp qua từng mục Zalo trong danh sách
+      # 2. Lặp gửi tự động qua danh sách Zalo có nhập dữ liệu
       - repeat:
-          for_each: "!input zalo_list"
+          for_each: >-
+            {% set z1 = {'thread_id': inputs.zalo_1_thread_id, 'account': inputs.zalo_1_account, 'type': inputs.zalo_1_type} %}
+            {% set z2 = {'thread_id': inputs.zalo_2_thread_id, 'account': inputs.zalo_2_account, 'type': inputs.zalo_2_type} %}
+            {% set z3 = {'thread_id': inputs.zalo_3_thread_id, 'account': inputs.zalo_3_account, 'type': inputs.zalo_3_type} %}
+            {% set z4 = {'thread_id': inputs.zalo_4_thread_id, 'account': inputs.zalo_4_account, 'type': inputs.zalo_4_type} %}
+            {% set items = [z1, z2, z3, z4] %}
+            {{ items | selectattr('thread_id', 'defined') | selectattr('thread_id', 'ne', '') | list }}
           sequence:
             - action: zalo_bot.send_message
               data:
