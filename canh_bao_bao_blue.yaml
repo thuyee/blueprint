@@ -1,5 +1,5 @@
 blueprint:
-  name: Cảnh báo bão KTTV -> Zalo (Multi UI) / Mobile
+  name: Cảnh báo bão KTTV -> Zalo (Multi UI Chuẩn) / Mobile
   description: >
     Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
     format bằng AI agent và gửi qua nhiều Zalo + thông báo điện thoại.
@@ -36,16 +36,80 @@ blueprint:
           integration: mobile_app
           multiple: true
 
-    zalo_targets:
-      name: Danh sách Zalo nhận tin
-      description: Bấm "Add item" để thêm Zalo mới trực quan trên giao diện UI.
-      default:
-        - thread_id: "1058896116335801995"
-          account: "+84868837123"
-          type: "1"
+    # ZALO 1 (Bắt buộc/Mặc định)
+    zalo_1_thread_id:
+      name: "Zalo 1 - Thread ID"
+      default: "1058896116335801995"
       selector:
-        object:
-          multiple: true
+        text: {}
+
+    zalo_1_account:
+      name: "Zalo 1 - Account Selection"
+      default: "+84868837123"
+      selector:
+        text: {}
+
+    zalo_1_type:
+      name: "Zalo 1 - Loại thread"
+      default: "1"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "User (cá nhân)"
+              value: "0"
+            - label: "Group (nhóm)"
+              value: "1"
+
+    # ZALO 2
+    zalo_2_thread_id:
+      name: "Zalo 2 - Thread ID (Để trống nếu không dùng)"
+      default: ""
+      selector:
+        text: {}
+
+    zalo_2_account:
+      name: "Zalo 2 - Account Selection"
+      default: "+84868837123"
+      selector:
+        text: {}
+
+    zalo_2_type:
+      name: "Zalo 2 - Loại thread"
+      default: "0"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "User (cá nhân)"
+              value: "0"
+            - label: "Group (nhóm)"
+              value: "1"
+
+    # ZALO 3
+    zalo_3_thread_id:
+      name: "Zalo 3 - Thread ID (Để trống nếu không dùng)"
+      default: ""
+      selector:
+        text: {}
+
+    zalo_3_account:
+      name: "Zalo 3 - Account Selection"
+      default: "+84868837123"
+      selector:
+        text: {}
+
+    zalo_3_type:
+      name: "Zalo 3 - Loại thread"
+      default: "0"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "User (cá nhân)"
+              value: "0"
+            - label: "Group (nhóm)"
+              value: "1"
 
 trigger:
   - trigger: time_pattern
@@ -71,9 +135,14 @@ action:
           title: "Cảnh báo bão"
           message: "{{ ket_qua.message_short }}"
 
-      # 2. Lặp qua danh sách Zalo
+      # 2. Lặp qua danh sách Zalo bằng Jinja Filter (Tự động loại bỏ Zalo bị để trống)
       - repeat:
-          for_each: "!input zalo_targets"
+          for_each: >-
+            {% set z1 = {'thread_id': inputs.zalo_1_thread_id, 'account': inputs.zalo_1_account, 'type': inputs.zalo_1_type} %}
+            {% set z2 = {'thread_id': inputs.zalo_2_thread_id, 'account': inputs.zalo_2_account, 'type': inputs.zalo_2_type} %}
+            {% set z3 = {'thread_id': inputs.zalo_3_thread_id, 'account': inputs.zalo_3_account, 'type': inputs.zalo_3_type} %}
+            {% set items = [z1, z2, z3] %}
+            {{ items | selectattr('thread_id', 'defined') | selectattr('thread_id', 'ne', '') | list }}
           sequence:
             - action: zalo_bot.send_message
               data:
