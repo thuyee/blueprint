@@ -1,8 +1,8 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (DLNA Stable Full)
+  name: Send summary to Zalo + Speaker (DLNA Stable Full - Extended Weather/Sensors)
   domain: automation
   author: smarthomeblack + GPT
-  description: Morning summary with stable alarm loop for DLNA/Phicomm + Zalo + TTS
+  description: Morning summary with extended weather/environmental sensors, calendar, todo, news, and speaker/Zalo notification.
 
   input:
     notify_time:
@@ -15,7 +15,7 @@ blueprint:
     enable_zalo:
       name: Enable Send to Zalo
       selector:
-        boolean:
+        boolean: {}
       default: true
 
     zalo_thread_id:
@@ -54,7 +54,7 @@ blueprint:
 
     calendar_duration:
       selector:
-        duration:
+        duration: {}
       default:
         hours: 18
 
@@ -66,14 +66,17 @@ blueprint:
             - domain: todo
       default: []
 
-    weather_entity:
-      name: Weather Entities
-      description: Chọn một hoặc nhiều entity thời tiết để AI tổng hợp và đưa ra nhận định chính xác hơn.
+    # Cập nhật chọn nhiều domain liên quan đến thời tiết & môi trường
+    weather_entities:
+      name: Weather & Environmental Entities
+      description: Chọn các entity thời tiết (weather) hoặc cảm biến liên quan (sensor/binary_sensor như nồng độ CO, cảm biến mưa, AQI, cảnh báo thời tiết cực đoan...).
       selector:
         entity:
           multiple: true
           filter:
             - domain: weather
+            - domain: sensor
+            - domain: binary_sensor
       default: []
 
     # ===== DAILY HOT NEWS =====
@@ -81,7 +84,7 @@ blueprint:
       name: Enable Daily Hot News
       description: Cho AI tự tìm và tóm tắt các tin nổi bật trong ngày.
       selector:
-        boolean:
+        boolean: {}
       default: true
 
     news_lookback_hours:
@@ -102,13 +105,32 @@ blueprint:
 
     conversation_agent:
       selector:
-        conversation_agent:
+        conversation_agent: {}
 
     prompt:
       selector:
         text:
           multiline: true
-      default: Generate a friendly Vietnamese morning summary.
+      default: >-
+        Please generate a friendly morning summary message in Vietnamese for the user.
+        - Your responses should always be helpful, warm, and informative.
+        - Avoid technical details or specific system information.
+        - Compose messages to motivate the user.
+        - Include notes on exceptional weather suitable for the season, with recommendations on what to wear today (e.g., long pants, shorts, (light) jacket, sweater).
+        - Mention upcoming meetings or appointments only if they exist. List events chronologically, showing the date and time.
+        - Do not inform about the absence of appointments.
+        - If you have a to-do list, summarize the most important tasks for the day. Prioritize them by due date. If any tasks are overdue, remind the user.
+        - Highlight special occasions such as birthdays or anniversaries.
+        - Add emojis to make the message more engaging.
+        - Ensure correct grammar and meaningful sentence structure.
+        - Use paragraphs to organize different sections (weather, calendar, tasks).
+        - Check state all weather & environmental devices/sensors provided.
+        - Bản tin chi tiết về các tin nổi bật:
+          🌧️ Thời tiết, bão, áp thấp, thiên tai nếu có
+          💰 Kinh tế
+          🔥 Sự kiện nổi bật
+          🏛️ Chính trị
+          ⚽ Thể thao Việt Nam
 
     # ===== SPEAKER =====
     speaker:
@@ -121,13 +143,13 @@ blueprint:
     enable_alarm:
       name: Enable Alarm
       selector:
-        boolean:
+        boolean: {}
       default: true
 
     alarm_url:
       name: Alarm URL
       selector:
-        text:
+        text: {}
       default: "http://homeassistant.local:8123/local/audio/baothuc.mp3"
 
     alarm_repeat:
@@ -168,7 +190,7 @@ blueprint:
     # ===== TTS =====
     enable_tts:
       selector:
-        boolean:
+        boolean: {}
       default: true
 
     tts_engine:
@@ -190,7 +212,7 @@ trigger:
 
 action:
   - variables:
-      weather_entity: !input weather_entity
+      weather_entities: !input weather_entities
       enable_daily_news: !input enable_daily_news
       news_lookback_hours: !input news_lookback_hours
       calendar_entity: !input calendar_entity
@@ -210,29 +232,16 @@ action:
       tts_engine: !input tts_engine
       tts_volume: !input tts_volume
 
-  # ===== WEATHER - MULTIPLE ENTITIES =====
-  - service: weather.get_forecasts
-    data:
-      type: hourly
-    target:
-      entity_id: "{{ weather_entity }}"
-    response_variable: forecast_data
-
+  # TỔNG HỢP DỮ LIỆU CÁC ENTITY THỜI TIẾT & CẢM BIẾN MÔI TRƯỜNG
   - variables:
       weather_summary: >-
         {% set ns = namespace(lines=[]) %}
-        {% for entity in weather_entity %}
-          {% set data = forecast_data.get(entity, {}) %}
-          {% set forecast = data.get('forecast', []) %}
-          {% if forecast | length > 0 %}
-            {% set f = forecast[0] %}
-            {% set line = entity ~ ': condition=' ~ (f.condition | default('unknown')) ~
-              ', temperature=' ~ (f.temperature | default('unknown')) ~
-              ', humidity=' ~ (f.humidity | default('unknown')) ~
-              ', precipitation=' ~ (f.precipitation | default('unknown')) ~
-              ', precipitation_probability=' ~ (f.precipitation_probability | default('unknown')) %}
-            {% set ns.lines = ns.lines + [line] %}
-          {% endif %}
+        {% for entity in weather_entities %}
+          {% set state_val = states(entity) %}
+          {% set name_val = state_attr(entity, 'friendly_name') or entity %}
+          {% set unit_val = state_attr(entity, 'unit_of_measurement') or '' %}
+          {% set line = name_val ~ ' (' ~ entity ~ '): ' ~ state_val ~ ' ' ~ unit_val %}
+          {% set ns.lines = ns.lines + [line] %}
         {% endfor %}
         {{ ns.lines | join('\n') }}
 
@@ -263,7 +272,7 @@ action:
         THỜI GIAN HIỆN TẠI:
         {{ now().strftime('%A, %d/%m/%Y %H:%M') }}
 
-        DỮ LIỆU THỜI TIẾT TỪ HOME ASSISTANT:
+        DỮ LIỆU THỜI TIẾT VÀ CẢM BIẾN MÔI TRƯỜNG TỪ HOME ASSISTANT:
         {{ weather_summary }}
 
         LỊCH:
@@ -279,51 +288,43 @@ action:
         {{ custom_footer }}
 
         ===== NHIỆM VỤ =====
-        Hãy tạo một bản tin buổi sáng bằng tiếng Việt, tự nhiên và dễ nghe bằng TTS.
+        Hãy tạo một bản tin buổi sáng bằng tiếng Việt, tự nhiên, thân thiện và dễ nghe khi đọc qua TTS.
 
-        1. THỜI TIẾT
-        - Sử dụng TẤT CẢ các entity thời tiết được cung cấp, không chỉ entity đầu tiên.
-        - So sánh các khu vực nếu có nhiều entity.
-        - Nêu nhiệt độ, trạng thái thời tiết và các chỉ số đáng chú ý nếu dữ liệu có.
-        - Dựa trên dữ liệu hiện tại và dự báo, đưa ra lời khuyên thực tế: quần áo, đi lại, ô, nắng nóng, mưa, giông, chất lượng hoạt động ngoài trời...
-        - Nếu có dấu hiệu thời tiết nguy hiểm, phải nhấn mạnh cảnh báo.
-        - Không tự bịa thông số mà entity không cung cấp.
+        1. THỜI TIẾT VÀ CẢNH BÁO MÔI TRƯỜNG
+        - Phân tích toàn bộ danh sách entity thời tiết và các cảm biến môi trường được cung cấp (nhiệt độ, mưa, chất lượng không khí, nồng độ CO, cảnh báo thời tiết cực đoan...).
+        - Đưa ra đánh giá tổng quan và chi tiết về tình hình thời tiết/môi trường xung quanh.
+        - ĐẶC BIỆT: Nếu phát hiện các chỉ số bất thường hoặc nguy hiểm (như nồng độ CO cao, mưa lớn, thời tiết cực đoan, chỉ số ô nhiễm cao...), phải đưa ra CẢNH BÁO NỔI BẬT ngay lập tức.
+        - Đưa ra lời khuyên trang phục thích hợp (áo khoác, quần dài, áo phông...) và các khuyến nghị an toàn thực tế (ví dụ: bật quạt thông gió nếu CO cao, đóng cửa sổ khi ô nhiễm/mưa, mang theo ô/áo mưa...).
 
         2. LỊCH VÀ TODO
-        - Tóm tắt các lịch quan trọng trong ngày.
-        - Nhắc các việc TODO còn cần làm.
-        - Ưu tiên việc gần thời điểm hiện tại hoặc có tính quan trọng.
+        - Tóm tắt các lịch quan trọng trong ngày theo thứ tự thời gian. Không báo nếu không có lịch.
+        - Nhắc các việc TODO cần hoàn thành, ưu tiên việc quá hạn hoặc sát giờ.
+        - Nhắc nhở các sự kiện đặc biệt nếu có (sinh nhật, kỷ niệm...).
 
         3. BẢN TIN HOT TRONG NGÀY
         {% if enable_daily_news %}
         TỰ TÌM KIẾM WEB và chọn các nội dung nổi bật, mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
         Bản tin cần ưu tiên các nhóm sau:
-        - Thời tiết, bão, áp thấp nhiệt đới, mưa lớn, nắng nóng và cảnh báo thiên tai.
-        - Kinh tế Việt Nam và quốc tế: thị trường, tỷ giá, giá vàng, dầu, chính sách kinh tế và các diễn biến đáng chú ý.
-        - Sự kiện nổi bật trong ngày.
-        - Chính trị: chỉ đưa các diễn biến chính trị thực sự nổi bật, có nguồn đáng tin cậy; tóm tắt trung lập, không bình luận thiên kiến.
-        - Thể thao Việt Nam: bóng đá và các môn thể thao khác có thành tích, giải đấu hoặc sự kiện đáng chú ý.
+        - 🌧️ Thời tiết, bão, áp thấp nhiệt đới, mưa lớn, nắng nóng và cảnh báo thiên tai.
+        - 💰 Kinh tế Việt Nam và quốc tế: thị trường, tỷ giá, giá vàng, dầu, chính sách kinh tế.
+        - 🔥 Sự kiện nổi bật trong ngày.
+        - 🏛️ Chính trị: các diễn biến chính trị nổi bật từ nguồn uy tín.
+        - ⚽ Thể thao Việt Nam: bóng đá và các môn thể thao nổi bật.
 
-        Chọn những tin thực sự HOT và có giá trị, không cố nhồi đủ mọi nhóm nếu không có tin đáng chú ý.
-        Ưu tiên nguồn chính thống, cơ quan nhà nước, nguồn chuyên ngành và báo chí uy tín.
-        Với tin thời tiết/bão, ưu tiên nguồn khí tượng chính thống.
-        Không bịa tin, không suy đoán thành sự thật.
-        Nếu một tin chưa được xác nhận hoặc nguồn không đáng tin cậy, bỏ qua.
-        Mỗi tin chỉ cần 1-2 câu, tập trung vào điều người nghe cần biết.
+        Chọn những tin thực sự HOT, ưu tiên nguồn chính thống.
+        Mỗi tin trình bày 1-2 câu súc tích.
         {% else %}
         Không tìm kiếm và không đưa phần tin tức.
         {% endif %}
 
         4. CẤU TRÚC ĐẦU RA
-        - Mở đầu ngắn gọn.
-        - Thời tiết và lời khuyên.
-        - Lịch/TODO.
-        - Bản tin hot trong ngày.
+        - Lời chào buổi sáng ấm áp, truyền cảm hứng.
+        - Phân đoạn thời tiết, môi trường & khuyến nghị trang phục/an toàn.
+        - Phân đoạn Lịch & Công việc (dùng đoạn văn hoặc danh sách ngắn).
+        - Phân đoạn Bản tin hot.
         - Kết thúc ngắn gọn.
-        - Không đọc URL, mã nguồn, tên tool hoặc thông tin kỹ thuật.
-        - Không nói rằng bạn là AI hay đang gọi agent khác.
-        - Không dùng bảng, markdown phức tạp hoặc ký hiệu khó đọc vì nội dung sẽ được gửi Zalo và đọc bằng TTS.
-        - Giọng văn thân thiện, súc tích nhưng đủ thông tin.
+        - Chèn emoji hợp lý để tin nhắn sinh động.
+        - Tránh bảng biểu hoặc markdown quá phức tạp để đọc TTS và gửi Zalo mượt mà.
       agent_id: !input conversation_agent
     response_variable: agent
 
