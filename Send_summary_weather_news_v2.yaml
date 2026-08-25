@@ -1,0 +1,395 @@
+blueprint:
+  name: Send summary to Zalo + Speaker (DLNA Stable Full)
+  domain: automation
+  author: smarthomeblack + GPT
+  description: Morning summary with stable alarm loop for DLNA/Phicomm + Zalo + TTS
+
+  input:
+    notify_time:
+      name: Notification Time
+      selector:
+        time: {}
+      default: "06:15:00"
+
+    # ===== ZALO =====
+    enable_zalo:
+      name: Enable Send to Zalo
+      selector:
+        boolean:
+      default: true
+
+    zalo_thread_id:
+      selector:
+        text: {}
+
+    zalo_account_selection:
+      selector:
+        text: {}
+
+    zalo_type:
+      selector:
+        select:
+          options:
+            - label: Personal
+              value: "0"
+            - label: Group
+              value: "1"
+      default: "1"
+
+    zalo_ttl:
+      selector:
+        number:
+          min: 0
+          max: 86400000
+          step: 1000
+      default: 0
+
+    # ===== DATA =====
+    calendar_entity:
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: calendar
+
+    calendar_duration:
+      selector:
+        duration:
+      default:
+        hours: 18
+
+    todo_entity:
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: todo
+      default: []
+
+    weather_entity:
+      name: Weather Entities
+      description: Chọn một hoặc nhiều entity thời tiết để AI tổng hợp và đưa ra nhận định chính xác hơn.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: weather
+      default: []
+
+    # ===== DAILY HOT NEWS =====
+    enable_daily_news:
+      name: Enable Daily Hot News
+      description: Cho AI tự tìm và tóm tắt các tin nổi bật trong ngày.
+      selector:
+        boolean:
+      default: true
+
+    news_lookback_hours:
+      name: News Lookback Hours
+      description: Khoảng thời gian ưu tiên khi tìm tin mới.
+      selector:
+        number:
+          min: 1
+          max: 72
+          step: 1
+      default: 24
+
+    custom_footer:
+      selector:
+        text:
+          multiline: true
+      default: ""
+
+    conversation_agent:
+      selector:
+        conversation_agent:
+
+    prompt:
+      selector:
+        text:
+          multiline: true
+      default: Generate a friendly Vietnamese morning summary.
+
+    # ===== SPEAKER =====
+    speaker:
+      selector:
+        entity:
+          domain: media_player
+      default: ""
+
+    # ===== ALARM =====
+    enable_alarm:
+      name: Enable Alarm
+      selector:
+        boolean:
+      default: true
+
+    alarm_url:
+      name: Alarm URL
+      selector:
+        text:
+      default: "http://homeassistant.local:8123/local/audio/baothuc.mp3"
+
+    alarm_repeat:
+      name: Alarm Repeat
+      selector:
+        number:
+          min: 1
+          max: 20
+          step: 1
+      default: 2
+
+    alarm_duration:
+      name: Alarm duration (seconds)
+      description: Length of alarm audio file
+      selector:
+        number:
+          min: 1
+          max: 600
+          step: 1
+      default: 8
+
+    alarm_volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+      default: 0.7
+
+    delay_before_tts:
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+      default: 2
+
+    # ===== TTS =====
+    enable_tts:
+      selector:
+        boolean:
+      default: true
+
+    tts_engine:
+      selector:
+        entity:
+          domain: tts
+
+    tts_volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+      default: 0.6
+
+trigger:
+  - platform: time
+    at: !input notify_time
+
+action:
+  - variables:
+      weather_entity: !input weather_entity
+      enable_daily_news: !input enable_daily_news
+      news_lookback_hours: !input news_lookback_hours
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      custom_footer: !input custom_footer
+      speaker: !input speaker
+      enable_zalo: !input enable_zalo
+      enable_alarm: !input enable_alarm
+      enable_tts: !input enable_tts
+      alarm_url: !input alarm_url
+      alarm_repeat: !input alarm_repeat
+      alarm_duration: !input alarm_duration
+      alarm_volume: !input alarm_volume
+      delay_before_tts: !input delay_before_tts
+      tts_engine: !input tts_engine
+      tts_volume: !input tts_volume
+
+  # ===== WEATHER - MULTIPLE ENTITIES =====
+  - service: weather.get_forecasts
+    data:
+      type: hourly
+    target:
+      entity_id: "{{ weather_entity }}"
+    response_variable: forecast_data
+
+  - variables:
+      weather_summary: >-
+        {% set ns = namespace(lines=[]) %}
+        {% for entity in weather_entity %}
+          {% set data = forecast_data.get(entity, {}) %}
+          {% set forecast = data.get('forecast', []) %}
+          {% if forecast | length > 0 %}
+            {% set f = forecast[0] %}
+            {% set line = entity ~ ': condition=' ~ (f.condition | default('unknown')) ~
+              ', temperature=' ~ (f.temperature | default('unknown')) ~
+              ', humidity=' ~ (f.humidity | default('unknown')) ~
+              ', precipitation=' ~ (f.precipitation | default('unknown')) ~
+              ', precipitation_probability=' ~ (f.precipitation_probability | default('unknown')) %}
+            {% set ns.lines = ns.lines + [line] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.lines | join('\n') }}
+
+  # ===== CALENDAR =====
+  - service: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
+
+  # ===== TODO =====
+  - service: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
+
+  # ===== AI SUMMARY =====
+  - service: conversation.process
+    data:
+      text: |
+        Bạn là trợ lý chính của Home Assistant và là AGENT DUY NHẤT.
+        Bạn phải tự xử lý toàn bộ bản tin buổi sáng. Nếu cần tin tức, hãy TỰ TÌM KIẾM WEB bằng khả năng tìm kiếm hiện có của bạn; KHÔNG gọi Agent 2 hay News Agent.
+
+        THỜI GIAN HIỆN TẠI:
+        {{ now().strftime('%A, %d/%m/%Y %H:%M') }}
+
+        DỮ LIỆU THỜI TIẾT TỪ HOME ASSISTANT:
+        {{ weather_summary }}
+
+        LỊCH:
+        {{ calendar_response }}
+
+        TODO:
+        {{ todo_response }}
+
+        YÊU CẦU RIÊNG CỦA NGƯỜI DÙNG:
+        {{ prompt }}
+
+        GHI CHÚ THÊM:
+        {{ custom_footer }}
+
+        ===== NHIỆM VỤ =====
+        Hãy tạo một bản tin buổi sáng bằng tiếng Việt, tự nhiên và dễ nghe bằng TTS.
+
+        1. THỜI TIẾT
+        - Sử dụng TẤT CẢ các entity thời tiết được cung cấp, không chỉ entity đầu tiên.
+        - So sánh các khu vực nếu có nhiều entity.
+        - Nêu nhiệt độ, trạng thái thời tiết và các chỉ số đáng chú ý nếu dữ liệu có.
+        - Dựa trên dữ liệu hiện tại và dự báo, đưa ra lời khuyên thực tế: quần áo, đi lại, ô, nắng nóng, mưa, giông, chất lượng hoạt động ngoài trời...
+        - Nếu có dấu hiệu thời tiết nguy hiểm, phải nhấn mạnh cảnh báo.
+        - Không tự bịa thông số mà entity không cung cấp.
+
+        2. LỊCH VÀ TODO
+        - Tóm tắt các lịch quan trọng trong ngày.
+        - Nhắc các việc TODO còn cần làm.
+        - Ưu tiên việc gần thời điểm hiện tại hoặc có tính quan trọng.
+
+        3. BẢN TIN HOT TRONG NGÀY
+        {% if enable_daily_news %}
+        TỰ TÌM KIẾM WEB và chọn các nội dung nổi bật, mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
+        Bản tin cần ưu tiên các nhóm sau:
+        - Thời tiết, bão, áp thấp nhiệt đới, mưa lớn, nắng nóng và cảnh báo thiên tai.
+        - Kinh tế Việt Nam và quốc tế: thị trường, tỷ giá, giá vàng, dầu, chính sách kinh tế và các diễn biến đáng chú ý.
+        - Sự kiện nổi bật trong ngày.
+        - Chính trị: chỉ đưa các diễn biến chính trị thực sự nổi bật, có nguồn đáng tin cậy; tóm tắt trung lập, không bình luận thiên kiến.
+        - Thể thao Việt Nam: bóng đá và các môn thể thao khác có thành tích, giải đấu hoặc sự kiện đáng chú ý.
+
+        Chọn những tin thực sự HOT và có giá trị, không cố nhồi đủ mọi nhóm nếu không có tin đáng chú ý.
+        Ưu tiên nguồn chính thống, cơ quan nhà nước, nguồn chuyên ngành và báo chí uy tín.
+        Với tin thời tiết/bão, ưu tiên nguồn khí tượng chính thống.
+        Không bịa tin, không suy đoán thành sự thật.
+        Nếu một tin chưa được xác nhận hoặc nguồn không đáng tin cậy, bỏ qua.
+        Mỗi tin chỉ cần 1-2 câu, tập trung vào điều người nghe cần biết.
+        {% else %}
+        Không tìm kiếm và không đưa phần tin tức.
+        {% endif %}
+
+        4. CẤU TRÚC ĐẦU RA
+        - Mở đầu ngắn gọn.
+        - Thời tiết và lời khuyên.
+        - Lịch/TODO.
+        - Bản tin hot trong ngày.
+        - Kết thúc ngắn gọn.
+        - Không đọc URL, mã nguồn, tên tool hoặc thông tin kỹ thuật.
+        - Không nói rằng bạn là AI hay đang gọi agent khác.
+        - Không dùng bảng, markdown phức tạp hoặc ký hiệu khó đọc vì nội dung sẽ được gửi Zalo và đọc bằng TTS.
+        - Giọng văn thân thiện, súc tích nhưng đủ thông tin.
+      agent_id: !input conversation_agent
+    response_variable: agent
+
+  # ===== SEND ZALO =====
+  - choose:
+      - conditions:
+          - "{{ enable_zalo }}"
+        sequence:
+          - service: zalo_bot.send_message
+            data:
+              message: "{{ agent.response.speech.plain.speech }}"
+              thread_id: !input zalo_thread_id
+              account_selection: !input zalo_account_selection
+              type: !input zalo_type
+              ttl: !input zalo_ttl
+
+  # ===== ALARM LOOP (DLNA STABLE) =====
+  - choose:
+      - conditions:
+          - "{{ enable_alarm and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ alarm_volume }}"
+
+          - repeat:
+              count: "{{ alarm_repeat }}"
+              sequence:
+                - service: media_player.play_media
+                  target:
+                    entity_id: "{{ speaker }}"
+                  data:
+                    media_content_id: "{{ alarm_url }}"
+                    media_content_type: music
+
+                - delay:
+                    seconds: "{{ alarm_duration }}"
+
+                - service: media_player.media_stop
+                  target:
+                    entity_id: "{{ speaker }}"
+
+                - delay: "00:00:01"
+
+  # ===== DELAY BEFORE TTS =====
+  - delay:
+      seconds: "{{ delay_before_tts }}"
+
+  # ===== TTS =====
+  - choose:
+      - conditions:
+          - "{{ enable_tts and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ tts_volume }}"
+
+          - service: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: "{{ speaker }}"
+              message: "{{ agent.response.speech.plain.speech }}"
+
+mode: single
