@@ -1,8 +1,10 @@
 blueprint:
-  name: Cảnh báo bão KTTV -> Zalo (Multi Direct UI) / Mobile
+  name: Cảnh báo bão KTTV -> Zalo/Mobile
   description: >
     Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
-    format bằng AI agent và gửi qua Zalo + thông báo điện thoại.
+    format bằng AI agent và gửi qua Zalo + thông báo điện thoại + các hành động tùy chọn thêm.
+    Yêu cầu: đã cài pyscript và copy file canh_bao_bao.py vào /config/pyscript/,
+    đã tạo helper input_text.canh_bao_bao_last_title.
   domain: automation
   input:
     check_interval:
@@ -23,46 +25,54 @@ blueprint:
 
     agent_id:
       name: AI Agent
-      description: Agent dùng để format bản tin theo mẫu. Để trống nếu chưa có agent nào.
+      description: Agent dùng để format bản tin theo mẫu. Để trống nếu chưa có agent nào, sẽ gửi nội dung thô.
       default: ""
       selector:
         conversation_agent: {}
 
     notify_device:
       name: Thiết bị nhận thông báo
-      description: Chọn 1 hoặc nhiều điện thoại/thiết bị nhận thông báo app HA
+      description: Chọn 1 hoặc nhiều điện thoại/thiết bị sẽ nhận thông báo qua app Home Assistant
       selector:
         device:
           integration: mobile_app
           multiple: true
 
-    zalo_account:
-      name: Tài khoản Zalo gửi tin (Account Selection)
-      default: "+84868837123"
+    zalo_thread_id:
+      name: Zalo Thread ID
+      description: ThreadId nhận tin nhắn (user hoặc group)
+      default: "1058896116335801995"
       selector:
         text: {}
 
     zalo_type:
       name: Loại thread Zalo
-      description: Áp dụng chung cho tất cả các Thread ID bên dưới
+      description: Thread ID ở trên là của 1 người dùng hay 1 nhóm
       default: "1"
       selector:
         select:
           mode: list
           options:
-            - label: "Group (nhóm)"
-              value: "1"
             - label: "User (cá nhân)"
               value: "0"
+            - label: "Group (nhóm)"
+              value: "1"
 
-    zalo_thread_ids:
-      name: Danh sách Zalo Thread ID nhận tin
-      description: Bấm nút "Add" trên giao diện để thêm nhiều Thread ID. Không cần nhập nội dung hay gõ code!
-      default:
-        - "1058896116335801995"
+    zalo_account:
+      name: Zalo Account Selection
+      default: "+84868837123"
       selector:
-        text:
-          multiple: true
+        text: {}
+
+    additional_actions:
+      name: Hành động bổ sung (Thêm Zalo 2, Zalo 3, Bật loa...)
+      description: >
+        Thêm các hành động tùy chỉnh sẽ chạy khi có bản tin bão mới.
+        Bạn có thể bấm "+ ADD ACTION" để thêm dịch vụ zalo_bot.send_message cho các Zalo khác.
+        (Nội dung tin nhắn sử dụng template: {{ ket_qua.message }})
+      default: []
+      selector:
+        action: {}
 
 trigger:
   - trigger: time_pattern
@@ -80,7 +90,7 @@ action:
       - condition: template
         value_template: "{{ ket_qua.has_new }}"
     then:
-      # 1. Gửi Mobile App HA
+      # 1. Thông báo qua Mobile App HA
       - action: notify.send_message
         target:
           device_id: !input notify_device
@@ -88,15 +98,16 @@ action:
           title: "Cảnh báo bão"
           message: "{{ ket_qua.message_short }}"
 
-      # 2. Tự động lặp qua từng Thread ID và chèn sẵn nội dung tin nhắn
-      - repeat:
-          for_each: "!input zalo_thread_ids"
-          sequence:
-            - action: zalo_bot.send_message
-              data:
-                thread_id: "{{ repeat.item }}"
-                account_selection: !input zalo_account
-                type: !input zalo_type
-                message: "{{ ket_qua.message }}"
+      # 2. Gửi Zalo mặc định
+      - action: zalo_bot.send_message
+        data:
+          thread_id: !input zalo_thread_id
+          account_selection: !input zalo_account
+          type: !input zalo_type
+          message: "{{ ket_qua.message }}"
+
+      # 3. Chạy các Action thêm được người dùng cấu hình trên UI
+      - choose: []
+        default: !input additional_actions
 
 mode: single
