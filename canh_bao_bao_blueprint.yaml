@@ -32,16 +32,31 @@ blueprint:
 
     notify_device:
       name: Thiết bị nhận thông báo
-      description: Điện thoại/thiết bị sẽ nhận thông báo qua app Home Assistant
+      description: Chọn 1 hoặc nhiều điện thoại/thiết bị sẽ nhận thông báo qua app Home Assistant
       selector:
         device:
           integration: mobile_app
+          multiple: true
 
     zalo_thread_id:
       name: Zalo Thread ID
+      description: ThreadId nhận tin nhắn (user hoặc group)
       default: "1058896116335801995"
       selector:
         text: {}
+
+    zalo_type:
+      name: Loại thread Zalo
+      description: Thread ID ở trên là của 1 người dùng hay 1 nhóm
+      default: "1"
+      selector:
+        select:
+          mode: list
+          options:
+            - label: "User (cá nhân)"
+              value: "0"
+            - label: "Group (nhóm)"
+              value: "1"
 
     zalo_account:
       name: Zalo Account Selection
@@ -76,7 +91,7 @@ action:
         data:
           thread_id: !input zalo_thread_id
           account_selection: !input zalo_account
-          type: 1
+          type: !input zalo_type
           message: "{{ ket_qua.message }}"
 
 mode: single
