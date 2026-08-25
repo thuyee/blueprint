@@ -1,5 +1,5 @@
 blueprint:
-  name: Cảnh báo bão KTTV -> Zalo (Multi Direct UI) / Mobile
+  name: Cảnh báo bão KTTV -> Zalo (Multi UI Chuẩn) / Mobile
   description: >
     Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
     format bằng AI agent và gửi qua Zalo + thông báo điện thoại.
@@ -57,7 +57,7 @@ blueprint:
 
     zalo_thread_ids:
       name: Danh sách Zalo Thread ID nhận tin
-      description: Bấm nút "Add" trên giao diện để thêm nhiều Thread ID. Không cần nhập nội dung hay gõ code!
+      description: Bấm nút "+ Thêm mục" để dán thêm Thread ID của Zalo thứ 2, 3...
       default:
         - "1058896116335801995"
       selector:
@@ -88,7 +88,7 @@ action:
           title: "Cảnh báo bão"
           message: "{{ ket_qua.message_short }}"
 
-      # 2. Tự động lặp qua từng Thread ID và chèn sẵn nội dung tin nhắn
+      # 2. Tự động lặp qua từng Thread ID trong danh sách để gửi tin
       - repeat:
           for_each: "!input zalo_thread_ids"
           sequence:
