@@ -1,0 +1,81 @@
+blueprint:
+  name: Cảnh báo bão KTTV -> Zalo/Mobile
+  description: >
+    Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
+    format bằng AI agent và gửi qua Zalo + thông báo điện thoại.
+    Yêu cầu: đã cài pyscript và copy file canh_bao_bao.py vào /config/pyscript/,
+    đã tạo helper input_text.canh_bao_bao_last_title.
+  domain: automation
+  input:
+    check_interval:
+      name: Tần suất kiểm tra
+      description: Bao lâu kiểm tra RSS 1 lần
+      default: "/15"
+      selector:
+        select:
+          options:
+            - label: "5 phút"
+              value: "/5"
+            - label: "15 phút"
+              value: "/15"
+            - label: "30 phút"
+              value: "/30"
+            - label: "60 phút"
+              value: "/60"
+
+    agent_id:
+      name: AI Agent
+      description: Agent dùng để format bản tin theo mẫu. Để trống nếu chưa có agent nào, sẽ gửi nội dung thô.
+      default: ""
+      selector:
+        conversation_agent: {}
+
+    notify_device:
+      name: Thiết bị nhận thông báo
+      description: Điện thoại/thiết bị sẽ nhận thông báo qua app Home Assistant
+      selector:
+        device:
+          integration: mobile_app
+
+    zalo_thread_id:
+      name: Zalo Thread ID
+      default: "1058896116335801995"
+      selector:
+        text: {}
+
+    zalo_account:
+      name: Zalo Account Selection
+      default: "+84868837123"
+      selector:
+        text: {}
+
+trigger:
+  - trigger: time_pattern
+    minutes: !input check_interval
+
+condition: []
+
+action:
+  - action: pyscript.tao_canh_bao_bao
+    data:
+      agent_id: !input agent_id
+    response_variable: ket_qua
+
+  - if:
+      - condition: template
+        value_template: "{{ ket_qua.has_new }}"
+    then:
+      - action: notify.send_message
+        target:
+          device_id: !input notify_device
+        data:
+          title: "Cảnh báo bão"
+          message: "{{ ket_qua.message }}"
+
+      - action: zalo_bot.send_message
+        data:
+          thread_id: !input zalo_thread_id
+          account_selection: !input zalo_account
+          message: "{{ ket_qua.message }}"
+
+mode: single
