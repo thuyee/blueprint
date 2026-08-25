@@ -1,8 +1,11 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (DLNA Stable Full - Extended Weather/Sensors)
+  name: Send summary to Zalo + Speaker (Optimized - Google Search News)
   domain: automation
   author: smarthomeblack + GPT
-  description: Morning summary with extended weather/environmental sensors, calendar, todo, news, and speaker/Zalo notification.
+  description: >-
+    Bản tin buổi sáng tối ưu: thời tiết/môi trường, lịch, công việc, và tin tức
+    nổi bật được AI tự tra cứu bằng công cụ "Perform Google Search". Gửi qua
+    Zalo và đọc qua loa (báo thức + TTS).
 
   input:
     notify_time:
@@ -51,6 +54,7 @@ blueprint:
           multiple: true
           filter:
             - domain: calendar
+      default: []
 
     calendar_duration:
       selector:
@@ -66,10 +70,12 @@ blueprint:
             - domain: todo
       default: []
 
-    # Cập nhật chọn nhiều domain liên quan đến thời tiết & môi trường
     weather_entities:
       name: Weather & Environmental Entities
-      description: Chọn các entity thời tiết (weather) hoặc cảm biến liên quan (sensor/binary_sensor như nồng độ CO, cảm biến mưa, AQI, cảnh báo thời tiết cực đoan...).
+      description: >-
+        Chọn các entity thời tiết (weather) hoặc cảm biến liên quan
+        (sensor/binary_sensor như nồng độ CO, cảm biến mưa, AQI, cảnh báo
+        thời tiết cực đoan...).
       selector:
         entity:
           multiple: true
@@ -82,7 +88,11 @@ blueprint:
     # ===== DAILY HOT NEWS =====
     enable_daily_news:
       name: Enable Daily Hot News
-      description: Cho AI tự tìm và tóm tắt các tin nổi bật trong ngày.
+      description: >-
+        Cho AI tự tìm và tóm tắt các tin nổi bật trong ngày bằng công cụ
+        "Perform Google Search". Yêu cầu conversation agent đã được gắn công
+        cụ tìm kiếm này (vd Google Generative AI với Grounding, hoặc Extended
+        OpenAI Conversation có function "Perform Google Search").
       selector:
         boolean: {}
       default: true
@@ -97,6 +107,25 @@ blueprint:
           step: 1
       default: 24
 
+    news_categories:
+      name: News Categories
+      description: Các chủ đề tin tức muốn AI tìm kiếm và đưa vào bản tin.
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: "🌧️ Thời tiết / thiên tai"
+              value: weather
+            - label: "💰 Kinh tế"
+              value: economy
+            - label: "🔥 Sự kiện nổi bật"
+              value: highlights
+            - label: "🏛️ Chính trị"
+              value: politics
+            - label: "⚽ Thể thao Việt Nam"
+              value: sports
+      default: [weather, economy, highlights, politics, sports]
+
     custom_footer:
       selector:
         text:
@@ -107,30 +136,15 @@ blueprint:
       selector:
         conversation_agent: {}
 
-    prompt:
+    extra_instructions:
+      name: Extra Instructions (optional)
+      description: >-
+        Yêu cầu tuỳ chỉnh thêm cho AI (vd giọng văn, độ dài, kiêng gì...).
+        Để trống nếu không cần.
       selector:
         text:
           multiline: true
-      default: >-
-        Please generate a friendly morning summary message in Vietnamese for the user.
-        - Your responses should always be helpful, warm, and informative.
-        - Avoid technical details or specific system information.
-        - Compose messages to motivate the user.
-        - Include notes on exceptional weather suitable for the season, with recommendations on what to wear today (e.g., long pants, shorts, (light) jacket, sweater).
-        - Mention upcoming meetings or appointments only if they exist. List events chronologically, showing the date and time.
-        - Do not inform about the absence of appointments.
-        - If you have a to-do list, summarize the most important tasks for the day. Prioritize them by due date. If any tasks are overdue, remind the user.
-        - Highlight special occasions such as birthdays or anniversaries.
-        - Add emojis to make the message more engaging.
-        - Ensure correct grammar and meaningful sentence structure.
-        - Use paragraphs to organize different sections (weather, calendar, tasks).
-        - Check state all weather & environmental devices/sensors provided.
-        - Bản tin chi tiết về các tin nổi bật:
-          🌧️ Thời tiết, bão, áp thấp, thiên tai nếu có
-          💰 Kinh tế
-          🔥 Sự kiện nổi bật
-          🏛️ Chính trị
-          ⚽ Thể thao Việt Nam
+      default: ""
 
     # ===== SPEAKER =====
     speaker:
@@ -210,187 +224,227 @@ trigger:
   - platform: time
     at: !input notify_time
 
-action:
-  - variables:
-      weather_entities: !input weather_entities
-      enable_daily_news: !input enable_daily_news
-      news_lookback_hours: !input news_lookback_hours
-      calendar_entity: !input calendar_entity
-      todo_entity: !input todo_entity
-      calendar_duration: !input calendar_duration
-      prompt: !input prompt
-      custom_footer: !input custom_footer
-      speaker: !input speaker
-      enable_zalo: !input enable_zalo
-      enable_alarm: !input enable_alarm
-      enable_tts: !input enable_tts
-      alarm_url: !input alarm_url
-      alarm_repeat: !input alarm_repeat
-      alarm_duration: !input alarm_duration
-      alarm_volume: !input alarm_volume
-      delay_before_tts: !input delay_before_tts
-      tts_engine: !input tts_engine
-      tts_volume: !input tts_volume
+variables:
+  weather_entities: !input weather_entities
+  enable_daily_news: !input enable_daily_news
+  news_lookback_hours: !input news_lookback_hours
+  news_categories: !input news_categories
+  calendar_entity: !input calendar_entity
+  todo_entity: !input todo_entity
+  calendar_duration: !input calendar_duration
+  extra_instructions: !input extra_instructions
+  custom_footer: !input custom_footer
+  speaker: !input speaker
+  enable_zalo: !input enable_zalo
+  enable_alarm: !input enable_alarm
+  enable_tts: !input enable_tts
+  alarm_url: !input alarm_url
+  alarm_repeat: !input alarm_repeat
+  alarm_duration: !input alarm_duration
+  alarm_volume: !input alarm_volume
+  delay_before_tts: !input delay_before_tts
+  tts_engine: !input tts_engine
+  tts_volume: !input tts_volume
 
-  # TỔNG HỢP DỮ LIỆU CÁC ENTITY THỜI TIẾT & CẢM BIẾN MÔI TRƯỜNG
+action:
+  # ===== TỔNG HỢP DỮ LIỆU THỜI TIẾT & CẢM BIẾN (bỏ qua entity unavailable/unknown) =====
   - variables:
       weather_summary: >-
         {% set ns = namespace(lines=[]) %}
         {% for entity in weather_entities %}
           {% set state_val = states(entity) %}
-          {% set name_val = state_attr(entity, 'friendly_name') or entity %}
-          {% set unit_val = state_attr(entity, 'unit_of_measurement') or '' %}
-          {% set line = name_val ~ ' (' ~ entity ~ '): ' ~ state_val ~ ' ' ~ unit_val %}
-          {% set ns.lines = ns.lines + [line] %}
+          {% if state_val not in ['unknown', 'unavailable', 'none', ''] %}
+            {% set name_val = state_attr(entity, 'friendly_name') or entity %}
+            {% set unit_val = state_attr(entity, 'unit_of_measurement') or '' %}
+            {% set ns.lines = ns.lines + [name_val ~ ': ' ~ state_val ~ ' ' ~ unit_val] %}
+          {% endif %}
         {% endfor %}
-        {{ ns.lines | join('\n') }}
+        {{ ns.lines | join('\n') if ns.lines else 'Không có dữ liệu cảm biến.' }}
 
-  # ===== CALENDAR =====
-  - service: calendar.get_events
-    data:
-      duration: !input calendar_duration
-    target:
-      entity_id: !input calendar_entity
-    response_variable: calendar_response
+  # ===== CALENDAR (chỉ gọi nếu có entity được chọn, tránh lỗi service call rỗng) =====
+  - if:
+      - condition: template
+        value_template: "{{ calendar_entity | length > 0 }}"
+    then:
+      - service: calendar.get_events
+        data:
+          duration: !input calendar_duration
+        target:
+          entity_id: !input calendar_entity
+        response_variable: calendar_response
+    else:
+      - variables:
+          calendar_response: {}
 
-  # ===== TODO =====
-  - service: todo.get_items
-    data:
-      status:
-        - needs_action
-    target:
-      entity_id: !input todo_entity
-    response_variable: todo_response
+  # ===== TODO (chỉ gọi nếu có entity được chọn) =====
+  - if:
+      - condition: template
+        value_template: "{{ todo_entity | length > 0 }}"
+    then:
+      - service: todo.get_items
+        data:
+          status:
+            - needs_action
+        target:
+          entity_id: !input todo_entity
+        response_variable: todo_response
+    else:
+      - variables:
+          todo_response: {}
 
   # ===== AI SUMMARY =====
   - service: conversation.process
     data:
+      agent_id: !input conversation_agent
       text: |
-        Bạn là trợ lý chính của Home Assistant và là AGENT DUY NHẤT.
-        Bạn phải tự xử lý toàn bộ bản tin buổi sáng. Nếu cần tin tức, hãy TỰ TÌM KIẾM WEB bằng khả năng tìm kiếm hiện có của bạn; KHÔNG gọi Agent 2 hay News Agent.
+        # VAI TRÒ
+        Bạn là trợ lý AI DUY NHẤT phụ trách soạn bản tin buổi sáng cho gia đình,
+        đọc qua loa (TTS) và gửi qua Zalo. Không có agent phụ nào khác hỗ trợ bạn.
 
-        THỜI GIAN HIỆN TẠI:
+        # THỜI GIAN HIỆN TẠI
         {{ now().strftime('%A, %d/%m/%Y %H:%M') }}
 
-        DỮ LIỆU THỜI TIẾT VÀ CẢM BIẾN MÔI TRƯỜNG TỪ HOME ASSISTANT:
+        # DỮ LIỆU HỆ THỐNG (từ Home Assistant — dùng để phân tích, KHÔNG đọc nguyên văn)
+        ## Thời tiết & cảm biến môi trường
         {{ weather_summary }}
 
-        LỊCH:
+        ## Lịch (trong {{ calendar_duration }} tới)
         {{ calendar_response }}
 
-        TODO:
+        ## Việc cần làm (todo, chưa hoàn thành)
         {{ todo_response }}
 
-        YÊU CẦU RIÊNG CỦA NGƯỜI DÙNG:
-        {{ prompt }}
-
-        GHI CHÚ THÊM:
+        # YÊU CẦU TUỲ CHỈNH TỪ NGƯỜI DÙNG
+        {{ extra_instructions if extra_instructions else 'Không có.' }}
         {{ custom_footer }}
 
-        ===== NHIỆM VỤ =====
-        Hãy tạo một bản tin buổi sáng bằng tiếng Việt, tự nhiên, thân thiện và dễ nghe khi đọc qua TTS.
+        # QUY TRÌNH THỰC HIỆN
 
-        1. THỜI TIẾT VÀ CẢNH BÁO MÔI TRƯỜNG
-        - Phân tích toàn bộ danh sách entity thời tiết và các cảm biến môi trường được cung cấp (nhiệt độ, mưa, chất lượng không khí, nồng độ CO, cảnh báo thời tiết cực đoan...).
-        - Đưa ra đánh giá tổng quan và chi tiết về tình hình thời tiết/môi trường xung quanh.
-        - ĐẶC BIỆT: Nếu phát hiện các chỉ số bất thường hoặc nguy hiểm (như nồng độ CO cao, mưa lớn, thời tiết cực đoan, chỉ số ô nhiễm cao...), phải đưa ra CẢNH BÁO NỔI BẬT ngay lập tức.
-        - Đưa ra lời khuyên trang phục thích hợp (áo khoác, quần dài, áo phông...) và các khuyến nghị an toàn thực tế (ví dụ: bật quạt thông gió nếu CO cao, đóng cửa sổ khi ô nhiễm/mưa, mang theo ô/áo mưa...).
-
-        2. LỊCH VÀ TODO
-        - Tóm tắt các lịch quan trọng trong ngày theo thứ tự thời gian. Không báo nếu không có lịch.
-        - Nhắc các việc TODO cần hoàn thành, ưu tiên việc quá hạn hoặc sát giờ.
-        - Nhắc nhở các sự kiện đặc biệt nếu có (sinh nhật, kỷ niệm...).
-
-        3. BẢN TIN HOT TRONG NGÀY
+        ## BƯỚC 1 — TÌM TIN TỨC
         {% if enable_daily_news %}
-        TỰ TÌM KIẾM WEB và chọn các nội dung nổi bật, mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
-        Bản tin cần ưu tiên các nhóm sau:
-        - 🌧️ Thời tiết, bão, áp thấp nhiệt đới, mưa lớn, nắng nóng và cảnh báo thiên tai.
-        - 💰 Kinh tế Việt Nam và quốc tế: thị trường, tỷ giá, giá vàng, dầu, chính sách kinh tế.
-        - 🔥 Sự kiện nổi bật trong ngày.
-        - 🏛️ Chính trị: các diễn biến chính trị nổi bật từ nguồn uy tín.
-        - ⚽ Thể thao Việt Nam: bóng đá và các môn thể thao nổi bật.
+        Bạn PHẢI dùng công cụ tìm kiếm web "Perform Google Search" để tra cứu tin
+        thật, KHÔNG được bịa tin hoặc dùng kiến thức cũ đã huấn luyện. Ưu tiên tin
+        trong {{ news_lookback_hours }} giờ gần nhất, từ báo chí chính thống Việt
+        Nam (VnExpress, Tuổi Trẻ, Thanh Niên, Zing/Znews, VTV, TTXVN...).
 
-        Chọn những tin thực sự HOT, ưu tiên nguồn chính thống.
-        Mỗi tin trình bày 1-2 câu súc tích.
+        Với MỖI chủ đề dưới đây, thực hiện một lượt gọi "Perform Google Search"
+        riêng với truy vấn tương ứng, sau đó chọn ra 1 tin đáng chú ý nhất và tóm
+        tắt trong 1-2 câu:
+        {% for cat in news_categories %}
+        {% if cat == 'weather' %}
+        - Truy vấn: "tin bão áp thấp nhiệt đới thời tiết nguy hiểm Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
+        {% elif cat == 'economy' %}
+        - Truy vấn: "tin kinh tế tỷ giá giá vàng chứng khoán Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
+        {% elif cat == 'highlights' %}
+        - Truy vấn: "tin tức nổi bật Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
+        {% elif cat == 'politics' %}
+        - Truy vấn: "tin chính trị Việt Nam quốc tế hôm nay {{ now().strftime('%d/%m/%Y') }}"
+        {% elif cat == 'sports' %}
+        - Truy vấn: "tin thể thao bóng đá Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
+        {% endif %}
+        {% endfor %}
+
+        Nếu một chủ đề không tìm được tin phù hợp, BỎ QUA chủ đề đó, tuyệt đối
+        không tự nghĩ ra tin thay thế.
         {% else %}
-        Không tìm kiếm và không đưa phần tin tức.
+        Bỏ qua bước này — không tìm kiếm và không đưa phần tin tức vào bản tin.
         {% endif %}
 
-        4. CẤU TRÚC ĐẦU RA
-        - Lời chào buổi sáng ấm áp, truyền cảm hứng.
-        - Phân đoạn thời tiết, môi trường & khuyến nghị trang phục/an toàn.
-        - Phân đoạn Lịch & Công việc (dùng đoạn văn hoặc danh sách ngắn).
-        - Phân đoạn Bản tin hot.
-        - Kết thúc ngắn gọn.
-        - Chèn emoji hợp lý để tin nhắn sinh động.
-        - Tránh bảng biểu hoặc markdown quá phức tạp để đọc TTS và gửi Zalo mượt mà.
-      agent_id: !input conversation_agent
+        ## BƯỚC 2 — PHÂN TÍCH THỜI TIẾT & MÔI TRƯỜNG
+        Dựa trên dữ liệu cảm biến ở trên (không tìm kiếm thêm cho phần này):
+        - Nhận xét tổng quan nhiệt độ, độ ẩm, khả năng mưa trong ngày.
+        - Gợi ý trang phục phù hợp (áo khoác / áo dài tay / áo phông / mang ô...).
+        - Nếu phát hiện chỉ số bất thường hoặc nguy hiểm (CO cao, mưa lớn, AQI
+          xấu...), đưa CẢNH BÁO NỔI BẬT kèm khuyến nghị an toàn cụ thể (mở cửa
+          thông gió, đóng cửa sổ, mang khẩu trang...).
+
+        ## BƯỚC 3 — LỊCH & CÔNG VIỆC
+        - Liệt kê lịch quan trọng theo thứ tự thời gian (ngày, giờ). Nếu trống,
+          KHÔNG đề cập gì đến việc "không có lịch".
+        - Nhắc việc todo, ưu tiên việc quá hạn hoặc gần đến hạn. Nếu trống, bỏ qua.
+        - Nếu phát hiện sự kiện đặc biệt (sinh nhật, kỷ niệm), nhấn mạnh riêng.
+
+        ## BƯỚC 4 — TỔNG HỢP BẢN TIN HOÀN CHỈNH
+        Ghép lại theo thứ tự:
+        1. Lời chào buổi sáng ấm áp, ngắn gọn, truyền cảm hứng.
+        2. Thời tiết/môi trường + trang phục + cảnh báo an toàn (nếu có).
+        3. Lịch & công việc trong ngày (bỏ qua mục nào trống, không nhắc "không có").
+        4. Tin tức hot theo từng chủ đề đã tìm được (bỏ qua nếu không bật hoặc
+           không có tin phù hợp).
+        5. Một câu chúc/kết thúc ngắn gọn.
+
+        # ĐỊNH DẠNG ĐẦU RA
+        - Tiếng Việt tự nhiên, ấm áp, câu văn mạch lạc, đúng ngữ pháp.
+        - Viết dạng đoạn văn ngắn, KHÔNG dùng markdown (không *, #, gạch đầu dòng
+          dày đặc, không bảng biểu) vì bản tin sẽ được đọc bằng TTS và gửi Zalo.
+        - Chèn emoji vừa phải ở đầu mỗi đoạn/chủ đề để dễ theo dõi, không lạm dụng.
+        - Độ dài vừa đủ, súc tích, ưu tiên chất lượng hơn số lượng.
+      language: vi
     response_variable: agent
 
   # ===== SEND ZALO =====
-  - choose:
-      - conditions:
-          - "{{ enable_zalo }}"
-        sequence:
-          - service: zalo_bot.send_message
-            data:
-              message: "{{ agent.response.speech.plain.speech }}"
-              thread_id: !input zalo_thread_id
-              account_selection: !input zalo_account_selection
-              type: !input zalo_type
-              ttl: !input zalo_ttl
+  - if:
+      - condition: template
+        value_template: "{{ enable_zalo }}"
+    then:
+      - service: zalo_bot.send_message
+        data:
+          message: "{{ agent.response.speech.plain.speech }}"
+          thread_id: !input zalo_thread_id
+          account_selection: !input zalo_account_selection
+          type: !input zalo_type
+          ttl: !input zalo_ttl
 
   # ===== ALARM LOOP (DLNA STABLE) =====
-  - choose:
-      - conditions:
-          - "{{ enable_alarm and speaker != '' }}"
-        sequence:
-          - service: media_player.volume_set
-            target:
-              entity_id: "{{ speaker }}"
-            data:
-              volume_level: "{{ alarm_volume }}"
+  - if:
+      - condition: template
+        value_template: "{{ enable_alarm and speaker != '' }}"
+    then:
+      - service: media_player.volume_set
+        target:
+          entity_id: "{{ speaker }}"
+        data:
+          volume_level: "{{ alarm_volume }}"
 
-          - repeat:
-              count: "{{ alarm_repeat }}"
-              sequence:
-                - service: media_player.play_media
-                  target:
-                    entity_id: "{{ speaker }}"
-                  data:
-                    media_content_id: "{{ alarm_url }}"
-                    media_content_type: music
+      - repeat:
+          count: "{{ alarm_repeat }}"
+          sequence:
+            - service: media_player.play_media
+              target:
+                entity_id: "{{ speaker }}"
+              data:
+                media_content_id: "{{ alarm_url }}"
+                media_content_type: music
 
-                - delay:
-                    seconds: "{{ alarm_duration }}"
+            - delay:
+                seconds: "{{ alarm_duration }}"
 
-                - service: media_player.media_stop
-                  target:
-                    entity_id: "{{ speaker }}"
+            - service: media_player.media_stop
+              target:
+                entity_id: "{{ speaker }}"
 
-                - delay: "00:00:01"
+            - delay: "00:00:01"
 
   # ===== DELAY BEFORE TTS =====
   - delay:
       seconds: "{{ delay_before_tts }}"
 
   # ===== TTS =====
-  - choose:
-      - conditions:
-          - "{{ enable_tts and speaker != '' }}"
-        sequence:
-          - service: media_player.volume_set
-            target:
-              entity_id: "{{ speaker }}"
-            data:
-              volume_level: "{{ tts_volume }}"
+  - if:
+      - condition: template
+        value_template: "{{ enable_tts and speaker != '' }}"
+    then:
+      - service: media_player.volume_set
+        target:
+          entity_id: "{{ speaker }}"
+        data:
+          volume_level: "{{ tts_volume }}"
 
-          - service: tts.speak
-            target:
-              entity_id: !input tts_engine
-            data:
-              media_player_entity_id: "{{ speaker }}"
-              message: "{{ agent.response.speech.plain.speech }}"
+      - service: tts.speak
+        target:
+          entity_id: !input tts_engine
+        data:
+          media_player_entity_id: "{{ speaker }}"
+          message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
