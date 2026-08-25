@@ -1,0 +1,379 @@
+blueprint:
+  name: Send summary to Zalo + Speaker (DLNA Stable Full)
+  domain: automation
+  author: smarthomeblack + GPT
+  description: Morning summary with stable alarm loop for DLNA/Phicomm + Zalo + TTS + News + Extended Weather
+
+  input:
+    notify_time:
+      name: Notification Time
+      selector:
+        time: {}
+      default: "06:15:00"
+
+    # ===== ZALO =====
+    enable_zalo:
+      name: Enable Send to Zalo
+      selector:
+        boolean:
+      default: true
+
+    zalo_thread_id:
+      selector:
+        text: {}
+
+    zalo_account_selection:
+      selector:
+        text: {}
+
+    zalo_type:
+      selector:
+        select:
+          options:
+            - label: Personal
+              value: "0"
+            - label: Group
+              value: "1"
+      default: "1"
+
+    zalo_ttl:
+      selector:
+        number:
+          min: 0
+          max: 86400000
+          step: 1000
+      default: 0
+
+    # ===== DATA =====
+    calendar_entity:
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: calendar
+
+    calendar_duration:
+      selector:
+        duration:
+      default:
+        hours: 18
+
+    todo_entity:
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: todo
+      default: []
+
+    weather_entity:
+      selector:
+        entity:
+          filter:
+            - domain: weather
+
+    # ===== WEATHER EXTRA (nhiều entity AccuWeather) =====
+    weather_extra_entities:
+      name: Weather Extra Sensors
+      description: Chọn các sensor thời tiết quan trọng muốn đưa vào bản tin (UV, AQI, cảnh báo bão, gió giật...)
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: sensor
+      default: []
+
+    custom_footer:
+      selector:
+        text:
+          multiline: true
+      default: ""
+
+    conversation_agent:
+      name: Summary Agent
+      selector:
+        conversation_agent:
+
+    prompt:
+      selector:
+        text:
+          multiline: true
+      default: Generate a friendly Vietnamese morning summary.
+
+    # ===== NEWS =====
+    enable_news:
+      name: Enable News Summary
+      description: Bật để agent tự tìm và tóm tắt tin tức mới nhất (yêu cầu news_agent có khả năng search internet, ví dụ Google Generative AI với Google Search tool bật)
+      selector:
+        boolean:
+      default: false
+
+    news_agent:
+      name: News Agent (phải có internet/search)
+      selector:
+        conversation_agent:
+      default: ""
+
+    news_topics:
+      name: News Topics
+      selector:
+        text:
+          multiline: true
+      default: "thời tiết/bão, kinh tế, sự kiện nổi bật, chính trị, thể thao Việt Nam"
+
+    # ===== SPEAKER =====
+    speaker:
+      selector:
+        entity:
+          domain: media_player
+      default: ""
+
+    # ===== ALARM =====
+    enable_alarm:
+      name: Enable Alarm
+      selector:
+        boolean:
+      default: true
+
+    alarm_url:
+      name: Alarm URL
+      selector:
+        text:
+      default: "http://homeassistant.local:8123/local/audio/baothuc.mp3"
+
+    alarm_repeat:
+      name: Alarm Repeat
+      selector:
+        number:
+          min: 1
+          max: 20
+          step: 1
+      default: 2
+
+    alarm_duration:
+      name: Alarm duration (seconds)
+      description: Length of alarm audio file
+      selector:
+        number:
+          min: 1
+          max: 600
+          step: 1
+      default: 8
+
+    alarm_volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+      default: 0.7
+
+    delay_before_tts:
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+      default: 2
+
+    # ===== TTS =====
+    enable_tts:
+      selector:
+        boolean:
+      default: true
+
+    tts_engine:
+      selector:
+        entity:
+          domain: tts
+
+    tts_volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+      default: 0.6
+
+trigger:
+  - platform: time
+    at: !input notify_time
+
+action:
+  - variables:
+      weather_entity: !input weather_entity
+      weather_extra_entities: !input weather_extra_entities
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      custom_footer: !input custom_footer
+      speaker: !input speaker
+      enable_zalo: !input enable_zalo
+      enable_alarm: !input enable_alarm
+      enable_tts: !input enable_tts
+      enable_news: !input enable_news
+      news_agent: !input news_agent
+      news_topics: !input news_topics
+      alarm_url: !input alarm_url
+      alarm_repeat: !input alarm_repeat
+      alarm_duration: !input alarm_duration
+      alarm_volume: !input alarm_volume
+      delay_before_tts: !input delay_before_tts
+      tts_engine: !input tts_engine
+      tts_volume: !input tts_volume
+
+  # ===== WEATHER (forecast cơ bản) =====
+  - service: weather.get_forecasts
+    data:
+      type: hourly
+    target:
+      entity_id: "{{ weather_entity }}"
+    response_variable: forecast_data
+
+  - variables:
+      forecast: "{{ forecast_data[weather_entity].forecast[0] }}"
+
+  # ===== WEATHER EXTRA (build text từ danh sách entity đã chọn) =====
+  - variables:
+      weather_extra_text: >
+        {% set ns = namespace(lines=[]) %}
+        {% for ent in weather_extra_entities %}
+          {% set st = states(ent) %}
+          {% if st not in ['unknown','unavailable',''] %}
+            {% set name = state_attr(ent, 'friendly_name') or ent %}
+            {% set unit = state_attr(ent, 'unit_of_measurement') or '' %}
+            {% set ns.lines = ns.lines + [name ~ ': ' ~ st ~ ' ' ~ unit] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.lines | join('\n') }}
+
+  # ===== CALENDAR =====
+  - service: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
+
+  # ===== TODO =====
+  - service: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
+
+  # ===== NEWS (agent có internet tự tìm & tóm tắt) =====
+  - choose:
+      - conditions:
+          - "{{ enable_news and news_agent not in [none, ''] }}"
+        sequence:
+          - service: conversation.process
+            data:
+              text: >
+                Tìm và tóm tắt các tin tức nổi bật nhất hôm nay ({{ now().strftime('%d/%m/%Y') }})
+                tại Việt Nam theo các chủ đề: {{ news_topics }}.
+                Trình bày ngắn gọn theo từng chủ đề, mỗi tin 1-2 câu, ghi rõ nguồn nếu có.
+              agent_id: !input news_agent
+            response_variable: news_agent_response
+    default:
+      - variables:
+          news_agent_response: none
+
+  - variables:
+      news_text: >
+        {% if enable_news and news_agent_response is not none %}
+          {{ news_agent_response.response.speech.plain.speech }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+
+  # ===== AI SUMMARY (ghép tất cả: weather cơ bản + weather extra + calendar + todo + news + footer) =====
+  - service: conversation.process
+    data:
+      text: >
+        Time: {{ now().strftime('%A %d/%m %H:%M') }}
+        Weather: {{ forecast.condition }} {{ forecast.temperature }}
+        {% if weather_extra_text != '' %}
+        Weather details:
+        {{ weather_extra_text }}
+        {% endif %}
+        {{ calendar_response }}
+        {{ todo_response }}
+        {% if news_text != '' %}
+        News today:
+        {{ news_text }}
+        {% endif %}
+        {{ custom_footer }}
+        {{ prompt }}
+      agent_id: !input conversation_agent
+    response_variable: agent
+
+  # ===== SEND ZALO =====
+  - choose:
+      - conditions:
+          - "{{ enable_zalo }}"
+        sequence:
+          - service: zalo_bot.send_message
+            data:
+              message: "{{ agent.response.speech.plain.speech }}"
+              thread_id: !input zalo_thread_id
+              account_selection: !input zalo_account_selection
+              type: !input zalo_type
+              ttl: !input zalo_ttl
+
+  # ===== ALARM LOOP (DLNA STABLE) =====
+  - choose:
+      - conditions:
+          - "{{ enable_alarm and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ alarm_volume }}"
+
+          - repeat:
+              count: "{{ alarm_repeat }}"
+              sequence:
+                - service: media_player.play_media
+                  target:
+                    entity_id: "{{ speaker }}"
+                  data:
+                    media_content_id: "{{ alarm_url }}"
+                    media_content_type: music
+
+                - delay:
+                    seconds: "{{ alarm_duration }}"
+
+                - service: media_player.media_stop
+                  target:
+                    entity_id: "{{ speaker }}"
+
+                - delay: "00:00:01"
+
+  # ===== DELAY BEFORE TTS =====
+  - delay:
+      seconds: "{{ delay_before_tts }}"
+
+  # ===== TTS =====
+  - choose:
+      - conditions:
+          - "{{ enable_tts and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ tts_volume }}"
+
+          - service: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: "{{ speaker }}"
+              message: "{{ agent.response.speech.plain.speech }}"
+
+mode: single
