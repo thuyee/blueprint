@@ -1,5 +1,5 @@
 blueprint:
-  name: Cảnh báo bão KTTV -> Zalo (Multi) / Mobile
+  name: Cảnh báo bão KTTV -> Zalo (Multi UI) / Mobile
   description: >
     Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
     format bằng AI agent và gửi qua nhiều Zalo + thông báo điện thoại.
@@ -36,24 +36,16 @@ blueprint:
           integration: mobile_app
           multiple: true
 
-    zalo_list:
-      name: Danh sách Zalo nhận tin (YAML List)
-      description: >
-        Nhập danh sách Zalo nhận tin dạng YAML.
-        Cú pháp:
-        - thread_id: "1058896116335801995"
-          account: "+84868837123"
-          type: "1"
-        - thread_id: "987654321098765432"
-          account: "+84868837123"
-          type: "0"
-      default: |
+    zalo_targets:
+      name: Danh sách Zalo nhận tin
+      description: Bấm "Add item" để thêm Zalo mới trực quan trên giao diện UI.
+      default:
         - thread_id: "1058896116335801995"
           account: "+84868837123"
           type: "1"
       selector:
-        text:
-          multiline: true
+        object:
+          multiple: true
 
 trigger:
   - trigger: time_pattern
@@ -79,9 +71,9 @@ action:
           title: "Cảnh báo bão"
           message: "{{ ket_qua.message_short }}"
 
-      # 2. Vòng lặp gửi cho danh sách Zalo (Dùng repeat for_each)
+      # 2. Lặp qua danh sách Zalo
       - repeat:
-          for_each: "!input zalo_list"
+          for_each: "!input zalo_targets"
           sequence:
             - action: zalo_bot.send_message
               data:
