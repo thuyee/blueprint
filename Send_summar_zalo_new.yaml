@@ -98,15 +98,13 @@ blueprint:
       default: true
 
     news_search_agent:
-      name: "Agent 2 - Chuyên tìm tin tức (tuỳ chọn)"
+      name: "Agent 2 - Chuyên tìm tin tức"
       description: >-
-        Nếu để trống: Agent chính (ở mục dưới) sẽ tự gọi công cụ
-        "Perform Google Search" để tìm tin trong lúc soạn bản tin.
-        Nếu chọn 1 agent ở đây: agent này sẽ được gọi RIÊNG để tìm và tóm
-        tắt tin tức trước, sau đó kết quả mới được đưa cho Agent chính soạn
-        bản tin hoàn chỉnh. Hữu ích khi chỉ 1 trong 2 agent có gắn công cụ
-        Google Search, hoặc muốn tách vai trò rõ ràng (agent tìm tin riêng,
-        agent viết văn riêng).
+        Agent này được gọi RIÊNG để tìm và tóm tắt tin tức bằng công cụ
+        "Perform Google Search" trước, sau đó kết quả mới đưa cho Agent
+        chính soạn bản tin hoàn chỉnh. Agent chính KHÔNG tự tìm kiếm nữa —
+        chỉ nhận tin có sẵn để viết văn. Nếu để trống, phần tin tức sẽ được
+        bỏ qua hoàn toàn (dù bật Enable Daily Hot News).
       selector:
         conversation_agent: {}
       default: ""
@@ -397,45 +395,52 @@ action:
         {{ todo_response }}
 
         # TIN TỨC
-        {% if not enable_daily_news %}
-        Không bật phần tin tức — bỏ qua, không tìm kiếm, không đưa tin vào bản tin.
-        {% elif news_search_agent not in [none, ''] %}
-        Tin dưới đây đã được một agent khác tìm kiếm và tóm tắt sẵn. CHỈ cần
-        đưa vào bản tin theo đúng giọng văn chung, KHÔNG tự tìm kiếm thêm,
-        KHÔNG bịa thêm tin, KHÔNG thay đổi sự kiện/số liệu đã cho:
-        {{ news_summary if news_summary else 'Agent tìm tin không trả về kết quả nào — bỏ qua phần tin tức.' }}
+        {% if not enable_daily_news or news_search_agent in [none, ''] %}
+        Không có phần tin tức trong lần này — bỏ qua, không được tự bịa tin
+        hoặc tự tìm kiếm.
         {% else %}
-        Bạn PHẢI tự dùng công cụ "Perform Google Search" để tra cứu tin
-        THẬT, KHÔNG bịa tin, KHÔNG dùng kiến thức cũ. Ưu tiên tin trong
-        {{ news_lookback_hours }} giờ gần nhất, từ báo chí chính thống Việt
-        Nam (VnExpress, Tuổi Trẻ, Thanh Niên, Znews, VTV, TTXVN...).
-
-        Thực hiện một lượt gọi "Perform Google Search" riêng cho từng chủ đề
-        bên dưới, chọn 1 tin đáng chú ý nhất mỗi chủ đề, tóm tắt 1-2 câu:
-
-        {{ news_queries }}
-
-        Nếu chủ đề nào không tìm được tin phù hợp, bỏ qua chủ đề đó, tuyệt
-        đối không tự nghĩ ra tin thay thế.
+        Tin dưới đây đã được một agent khác tìm kiếm và tóm tắt sẵn bằng dữ
+        liệu THẬT. Bạn CHỈ được đưa nguyên các tin này vào bản tin theo đúng
+        giọng văn chung — KHÔNG tự tìm kiếm thêm, KHÔNG bịa thêm tin, KHÔNG
+        thay đổi sự kiện/số liệu đã cho:
+        {{ news_summary if news_summary else 'Agent tìm tin không trả về kết quả nào — bỏ qua phần tin tức, không giải thích lý do.' }}
         {% endif %}
 
         # YÊU CẦU VỀ NỘI DUNG & VĂN PHONG
         {{ prompt }}
         {{ custom_footer }}
 
-        # CẤU TRÚC BẢN TIN
-        1. Lời chào buổi sáng ngắn gọn.
-        2. Thời tiết/môi trường + trang phục + cảnh báo an toàn nếu chỉ số
-           bất thường (CO cao, mưa lớn, AQI xấu...).
-        3. Lịch & công việc trong ngày (bỏ qua mục nào trống, không nhắc
-           "không có lịch/việc").
-        4. Tin tức hot theo từng chủ đề đã tìm được (bỏ qua nếu không có).
-        5. Một câu chúc/kết thúc ngắn gọn.
+        # CẤU TRÚC BẢN TIN (bắt buộc theo đúng thứ tự, đúng tiêu đề mục)
+        Ghép các mục sau, MỖI MỤC cách nhau đúng 1 dòng trống. Bỏ hẳn mục nào
+        không có nội dung (không để tiêu đề trống, không viết "không có").
+
+        🔴 LỜI CHÀO
+        1 câu chào buổi sáng ngắn gọn, truyền cảm hứng.
+
+        🔴 THỜI TIẾT
+        Nhận xét thời tiết/môi trường, gợi ý trang phục, cảnh báo an toàn
+        nếu chỉ số bất thường (CO cao, mưa lớn, AQI xấu...).
+
+        🔴 LỊCH & CÔNG VIỆC
+        (chỉ thêm mục này nếu có lịch hoặc todo) Liệt kê theo thứ tự thời
+        gian, việc quá hạn nhắc riêng, sự kiện đặc biệt (sinh nhật...) nêu
+        bật.
+
+        🔴 TIN TỨC HÔM NAY
+        (chỉ thêm mục này nếu có tin) Mỗi tin 1-2 câu, giữ emoji chủ đề ở
+        đầu mỗi tin, mỗi tin xuống dòng riêng.
+
+        🔴 LỜI KẾT
+        1 câu chúc kết thúc ngắn gọn.
 
         # ĐỊNH DẠNG ĐẦU RA
         - Tiếng Việt tự nhiên, câu văn mạch lạc, đúng ngữ pháp.
-        - Viết dạng đoạn văn ngắn.
-        - Tránh bảng biểu hoặc markdown quá phức tạp để đọc TTS và gửi Zalo mượt mà.
+        - Giữ ĐÚNG format tiêu đề "🔴 TÊN MỤC" viết hoa như trên, xuống dòng
+          ngay sau tiêu đề, rồi mới đến nội dung.
+        - Giữa các mục cách nhau 1 dòng trống để dễ đọc trên Zalo.
+        - Trong mỗi mục, viết đoạn văn ngắn hoặc mỗi ý 1 dòng — KHÔNG dùng
+          markdown (không *, #, dấu gạch đầu dòng "-") vì bản tin còn được
+          đọc qua TTS, chỉ dùng emoji và xuống dòng để phân đoạn.
         - Độ dài vừa đủ, súc tích, ưu tiên chất lượng hơn số lượng.
     response_variable: agent
 
