@@ -1,11 +1,12 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (Optimized - Google Search News)
+  name: Send summary to Zalo + Speaker (v2 - Editable Prompt + News Agent)
   domain: automation
   author: smarthomeblack + GPT
   description: >-
-    Bản tin buổi sáng tối ưu: thời tiết/môi trường, lịch, công việc, và tin tức
-    nổi bật được AI tự tra cứu bằng công cụ "Perform Google Search". Gửi qua
-    Zalo và đọc qua loa (báo thức + TTS).
+    Bản tin buổi sáng: thời tiết/môi trường, lịch, công việc, và tin tức nổi
+    bật. Có thể dùng 1 agent duy nhất (tự gọi "Perform Google Search"), hoặc
+    tách riêng 1 Agent 2 chuyên tìm tin tức rồi đưa kết quả cho Agent chính
+    soạn bản tin. Gửi qua Zalo và đọc qua loa (báo thức + TTS).
 
   input:
     notify_time:
@@ -89,13 +90,26 @@ blueprint:
     enable_daily_news:
       name: Enable Daily Hot News
       description: >-
-        Cho AI tự tìm và tóm tắt các tin nổi bật trong ngày bằng công cụ
-        "Perform Google Search". Yêu cầu conversation agent đã được gắn công
-        cụ tìm kiếm này (vd Google Generative AI với Grounding, hoặc Extended
-        OpenAI Conversation có function "Perform Google Search").
+        Bật/tắt phần tin tức trong bản tin. Nếu bật, tin sẽ được tìm bằng
+        công cụ "Perform Google Search" — do Agent chính tự gọi, hoặc do
+        Agent 2 (nếu được chọn ở dưới) đảm nhiệm.
       selector:
         boolean: {}
       default: true
+
+    news_search_agent:
+      name: "Agent 2 - Chuyên tìm tin tức (tuỳ chọn)"
+      description: >-
+        Nếu để trống: Agent chính (ở mục dưới) sẽ tự gọi công cụ
+        "Perform Google Search" để tìm tin trong lúc soạn bản tin.
+        Nếu chọn 1 agent ở đây: agent này sẽ được gọi RIÊNG để tìm và tóm
+        tắt tin tức trước, sau đó kết quả mới được đưa cho Agent chính soạn
+        bản tin hoàn chỉnh. Hữu ích khi chỉ 1 trong 2 agent có gắn công cụ
+        Google Search, hoặc muốn tách vai trò rõ ràng (agent tìm tin riêng,
+        agent viết văn riêng).
+      selector:
+        conversation_agent: {}
+      default: ""
 
     news_lookback_hours:
       name: News Lookback Hours
@@ -126,21 +140,37 @@ blueprint:
               value: sports
       default: [weather, economy, highlights, politics, sports]
 
-    custom_footer:
-      selector:
-        text:
-          multiline: true
-      default: ""
-
     conversation_agent:
+      name: "Agent chính - Soạn bản tin"
       selector:
         conversation_agent: {}
 
-    extra_instructions:
-      name: Extra Instructions (optional)
+    prompt:
+      name: Prompt (có thể chỉnh sửa)
       description: >-
-        Yêu cầu tuỳ chỉnh thêm cho AI (vd giọng văn, độ dài, kiêng gì...).
-        Để trống nếu không cần.
+        Yêu cầu chi tiết cho Agent chính về giọng văn, nội dung, độ dài...
+        Anh có thể thêm/bớt thoải mái ở đây mà không cần sửa blueprint gốc.
+        Phần cấu trúc bắt buộc (thời tiết, lịch, tin tức...) vẫn được chèn
+        tự động phía trên/dưới nội dung này.
+      selector:
+        text:
+          multiline: true
+      default: >-
+        - Giọng văn ấm áp, gần gũi như người thân nhắc nhở buổi sáng, tạo động
+          lực cho cả ngày.
+        - Đưa ra nhận xét thời tiết phù hợp mùa, kèm gợi ý trang phục cụ thể
+          (quần dài/ngắn, áo khoác/áo phông, có cần mang ô không).
+        - Chỉ nhắc lịch/cuộc hẹn nếu thực sự có, liệt kê theo thứ tự thời
+          gian kèm ngày giờ rõ ràng. Không nhắc nếu không có lịch nào.
+        - Nếu có việc todo, tóm tắt việc quan trọng nhất, ưu tiên theo hạn
+          chót; nhắc riêng nếu có việc quá hạn.
+        - Nêu bật ngày đặc biệt nếu có (sinh nhật, kỷ niệm).
+        - Thêm emoji vừa phải cho sinh động, không lạm dụng.
+        - Ngữ pháp chuẩn, câu văn mạch lạc, chia đoạn rõ ràng theo từng chủ
+          đề (thời tiết, lịch/công việc, tin tức).
+
+    custom_footer:
+      name: Footer / ghi chú thêm (tuỳ chọn)
       selector:
         text:
           multiline: true
@@ -227,12 +257,13 @@ trigger:
 variables:
   weather_entities: !input weather_entities
   enable_daily_news: !input enable_daily_news
+  news_search_agent: !input news_search_agent
   news_lookback_hours: !input news_lookback_hours
   news_categories: !input news_categories
   calendar_entity: !input calendar_entity
   todo_entity: !input todo_entity
   calendar_duration: !input calendar_duration
-  extra_instructions: !input extra_instructions
+  prompt: !input prompt
   custom_footer: !input custom_footer
   speaker: !input speaker
   enable_zalo: !input enable_zalo
@@ -245,6 +276,25 @@ variables:
   delay_before_tts: !input delay_before_tts
   tts_engine: !input tts_engine
   tts_volume: !input tts_volume
+  # Danh sách truy vấn tìm kiếm theo từng chủ đề đã chọn (dùng chung cho cả
+  # Agent 2 lẫn Agent chính khi tự tìm kiếm)
+  news_queries: >-
+    {% set ns = namespace(lines=[]) %}
+    {% set today = now().strftime('%d/%m/%Y') %}
+    {% for cat in news_categories %}
+      {% if cat == 'weather' %}
+        {% set ns.lines = ns.lines + ['🌧️ Thời tiết/thiên tai: "tin bão áp thấp nhiệt đới thời tiết nguy hiểm Việt Nam hôm nay ' ~ today ~ '"'] %}
+      {% elif cat == 'economy' %}
+        {% set ns.lines = ns.lines + ['💰 Kinh tế: "tin kinh tế tỷ giá giá vàng chứng khoán Việt Nam hôm nay ' ~ today ~ '"'] %}
+      {% elif cat == 'highlights' %}
+        {% set ns.lines = ns.lines + ['🔥 Sự kiện nổi bật: "tin tức nổi bật Việt Nam hôm nay ' ~ today ~ '"'] %}
+      {% elif cat == 'politics' %}
+        {% set ns.lines = ns.lines + ['🏛️ Chính trị: "tin chính trị Việt Nam quốc tế hôm nay ' ~ today ~ '"'] %}
+      {% elif cat == 'sports' %}
+        {% set ns.lines = ns.lines + ['⚽ Thể thao: "tin thể thao bóng đá Việt Nam hôm nay ' ~ today ~ '"'] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.lines | join('\n') }}
 
 action:
   # ===== TỔNG HỢP DỮ LIỆU THỜI TIẾT & CẢM BIẾN (bỏ qua entity unavailable/unknown) =====
@@ -292,14 +342,46 @@ action:
       - variables:
           todo_response: {}
 
-  # ===== AI SUMMARY =====
+  # ===== AGENT 2: TÌM TIN TỨC RIÊNG (chỉ chạy nếu bật tin tức VÀ có chọn Agent 2) =====
+  - if:
+      - condition: template
+        value_template: "{{ enable_daily_news and news_search_agent not in [none, ''] }}"
+    then:
+      - service: conversation.process
+        data:
+          agent_id: "{{ news_search_agent }}"
+          language: vi
+          text: >-
+            Bạn là trợ lý TÌM KIẾM TIN TỨC. Dùng công cụ "Perform Google
+            Search" để tra cứu tin THẬT, KHÔNG bịa tin, KHÔNG dùng kiến thức
+            cũ đã huấn luyện. Chỉ ưu tiên tin trong {{ news_lookback_hours }}
+            giờ gần nhất, từ báo chí chính thống Việt Nam (VnExpress, Tuổi
+            Trẻ, Thanh Niên, Znews, VTV, TTXVN...).
+
+            Thực hiện MỘT lượt gọi "Perform Google Search" riêng cho từng
+            chủ đề bên dưới, sau đó chọn 1 tin đáng chú ý nhất mỗi chủ đề:
+
+            {{ news_queries }}
+
+            Trả lời CHỈ gồm danh sách tin đã tóm tắt (1-2 câu/tin, giữ emoji
+            chủ đề ở đầu mỗi tin). Nếu chủ đề nào không tìm được tin phù hợp
+            thì bỏ qua, không viết gì thêm, không lời chào hay dẫn nhập.
+        response_variable: news_agent_response
+      - variables:
+          news_summary: "{{ news_agent_response.response.speech.plain.speech }}"
+    else:
+      - variables:
+          news_summary: ""
+
+  # ===== AGENT CHÍNH: SOẠN BẢN TIN =====
   - service: conversation.process
     data:
       agent_id: !input conversation_agent
+      language: vi
       text: |
         # VAI TRÒ
-        Bạn là trợ lý AI DUY NHẤT phụ trách soạn bản tin buổi sáng cho gia đình,
-        đọc qua loa (TTS) và gửi qua Zalo. Không có agent phụ nào khác hỗ trợ bạn.
+        Bạn là trợ lý AI soạn bản tin buổi sáng cho gia đình, đọc qua loa
+        (TTS) và gửi qua Zalo.
 
         # THỜI GIAN HIỆN TẠI
         {{ now().strftime('%A, %d/%m/%Y %H:%M') }}
@@ -314,72 +396,47 @@ action:
         ## Việc cần làm (todo, chưa hoàn thành)
         {{ todo_response }}
 
-        # YÊU CẦU TUỲ CHỈNH TỪ NGƯỜI DÙNG
-        {{ extra_instructions if extra_instructions else 'Không có.' }}
+        # TIN TỨC
+        {% if not enable_daily_news %}
+        Không bật phần tin tức — bỏ qua, không tìm kiếm, không đưa tin vào bản tin.
+        {% elif news_search_agent not in [none, ''] %}
+        Tin dưới đây đã được một agent khác tìm kiếm và tóm tắt sẵn. CHỈ cần
+        đưa vào bản tin theo đúng giọng văn chung, KHÔNG tự tìm kiếm thêm,
+        KHÔNG bịa thêm tin, KHÔNG thay đổi sự kiện/số liệu đã cho:
+        {{ news_summary if news_summary else 'Agent tìm tin không trả về kết quả nào — bỏ qua phần tin tức.' }}
+        {% else %}
+        Bạn PHẢI tự dùng công cụ "Perform Google Search" để tra cứu tin
+        THẬT, KHÔNG bịa tin, KHÔNG dùng kiến thức cũ. Ưu tiên tin trong
+        {{ news_lookback_hours }} giờ gần nhất, từ báo chí chính thống Việt
+        Nam (VnExpress, Tuổi Trẻ, Thanh Niên, Znews, VTV, TTXVN...).
+
+        Thực hiện một lượt gọi "Perform Google Search" riêng cho từng chủ đề
+        bên dưới, chọn 1 tin đáng chú ý nhất mỗi chủ đề, tóm tắt 1-2 câu:
+
+        {{ news_queries }}
+
+        Nếu chủ đề nào không tìm được tin phù hợp, bỏ qua chủ đề đó, tuyệt
+        đối không tự nghĩ ra tin thay thế.
+        {% endif %}
+
+        # YÊU CẦU VỀ NỘI DUNG & VĂN PHONG
+        {{ prompt }}
         {{ custom_footer }}
 
-        # QUY TRÌNH THỰC HIỆN
-
-        ## BƯỚC 1 — TÌM TIN TỨC
-        {% if enable_daily_news %}
-        Bạn PHẢI dùng công cụ tìm kiếm web "Perform Google Search" để tra cứu tin
-        thật, KHÔNG được bịa tin hoặc dùng kiến thức cũ đã huấn luyện. Ưu tiên tin
-        trong {{ news_lookback_hours }} giờ gần nhất, từ báo chí chính thống Việt
-        Nam (VnExpress, Tuổi Trẻ, Thanh Niên, Zing/Znews, VTV, TTXVN...).
-
-        Với MỖI chủ đề dưới đây, thực hiện một lượt gọi "Perform Google Search"
-        riêng với truy vấn tương ứng, sau đó chọn ra 1 tin đáng chú ý nhất và tóm
-        tắt trong 1-2 câu:
-        {% for cat in news_categories %}
-        {% if cat == 'weather' %}
-        - Truy vấn: "tin bão áp thấp nhiệt đới thời tiết nguy hiểm Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
-        {% elif cat == 'economy' %}
-        - Truy vấn: "tin kinh tế tỷ giá giá vàng chứng khoán Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
-        {% elif cat == 'highlights' %}
-        - Truy vấn: "tin tức nổi bật Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
-        {% elif cat == 'politics' %}
-        - Truy vấn: "tin chính trị Việt Nam quốc tế hôm nay {{ now().strftime('%d/%m/%Y') }}"
-        {% elif cat == 'sports' %}
-        - Truy vấn: "tin thể thao bóng đá Việt Nam hôm nay {{ now().strftime('%d/%m/%Y') }}"
-        {% endif %}
-        {% endfor %}
-
-        Nếu một chủ đề không tìm được tin phù hợp, BỎ QUA chủ đề đó, tuyệt đối
-        không tự nghĩ ra tin thay thế.
-        {% else %}
-        Bỏ qua bước này — không tìm kiếm và không đưa phần tin tức vào bản tin.
-        {% endif %}
-
-        ## BƯỚC 2 — PHÂN TÍCH THỜI TIẾT & MÔI TRƯỜNG
-        Dựa trên dữ liệu cảm biến ở trên (không tìm kiếm thêm cho phần này):
-        - Nhận xét tổng quan nhiệt độ, độ ẩm, khả năng mưa trong ngày.
-        - Gợi ý trang phục phù hợp (áo khoác / áo dài tay / áo phông / mang ô...).
-        - Nếu phát hiện chỉ số bất thường hoặc nguy hiểm (CO cao, mưa lớn, AQI
-          xấu...), đưa CẢNH BÁO NỔI BẬT kèm khuyến nghị an toàn cụ thể (mở cửa
-          thông gió, đóng cửa sổ, mang khẩu trang...).
-
-        ## BƯỚC 3 — LỊCH & CÔNG VIỆC
-        - Liệt kê lịch quan trọng theo thứ tự thời gian (ngày, giờ). Nếu trống,
-          KHÔNG đề cập gì đến việc "không có lịch".
-        - Nhắc việc todo, ưu tiên việc quá hạn hoặc gần đến hạn. Nếu trống, bỏ qua.
-        - Nếu phát hiện sự kiện đặc biệt (sinh nhật, kỷ niệm), nhấn mạnh riêng.
-
-        ## BƯỚC 4 — TỔNG HỢP BẢN TIN HOÀN CHỈNH
-        Ghép lại theo thứ tự:
-        1. Lời chào buổi sáng ấm áp, ngắn gọn, truyền cảm hứng.
-        2. Thời tiết/môi trường + trang phục + cảnh báo an toàn (nếu có).
-        3. Lịch & công việc trong ngày (bỏ qua mục nào trống, không nhắc "không có").
-        4. Tin tức hot theo từng chủ đề đã tìm được (bỏ qua nếu không bật hoặc
-           không có tin phù hợp).
+        # CẤU TRÚC BẢN TIN
+        1. Lời chào buổi sáng ngắn gọn.
+        2. Thời tiết/môi trường + trang phục + cảnh báo an toàn nếu chỉ số
+           bất thường (CO cao, mưa lớn, AQI xấu...).
+        3. Lịch & công việc trong ngày (bỏ qua mục nào trống, không nhắc
+           "không có lịch/việc").
+        4. Tin tức hot theo từng chủ đề đã tìm được (bỏ qua nếu không có).
         5. Một câu chúc/kết thúc ngắn gọn.
 
         # ĐỊNH DẠNG ĐẦU RA
-        - Tiếng Việt tự nhiên, ấm áp, câu văn mạch lạc, đúng ngữ pháp.
-        - Viết dạng đoạn văn ngắn, KHÔNG dùng markdown (không *, #, gạch đầu dòng
-          dày đặc, không bảng biểu) vì bản tin sẽ được đọc bằng TTS và gửi Zalo.
-        - Chèn emoji vừa phải ở đầu mỗi đoạn/chủ đề để dễ theo dõi, không lạm dụng.
+        - Tiếng Việt tự nhiên, câu văn mạch lạc, đúng ngữ pháp.
+        - Viết dạng đoạn văn ngắn.
+        - Tránh bảng biểu hoặc markdown quá phức tạp để đọc TTS và gửi Zalo mượt mà.
         - Độ dài vừa đủ, súc tích, ưu tiên chất lượng hơn số lượng.
-      language: vi
     response_variable: agent
 
   # ===== SEND ZALO =====
