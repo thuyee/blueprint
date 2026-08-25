@@ -76,6 +76,7 @@ action:
         data:
           thread_id: !input zalo_thread_id
           account_selection: !input zalo_account
+          type: 1
           message: "{{ ket_qua.message }}"
 
 mode: single
