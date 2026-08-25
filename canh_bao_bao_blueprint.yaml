@@ -1,8 +1,8 @@
 blueprint:
-  name: Cảnh báo bão KTTV -> Zalo (Multi UI Chuẩn) / Mobile
+  name: Cảnh báo bão KTTV -> Zalo (Multi Form UI) / Mobile
   description: >
     Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
-    format bằng AI agent và gửi qua Zalo + thông báo điện thoại.
+    format bằng AI agent và gửi qua nhiều Zalo + thông báo điện thoại.
   domain: automation
   input:
     check_interval:
@@ -36,33 +36,38 @@ blueprint:
           integration: mobile_app
           multiple: true
 
-    zalo_account:
-      name: Tài khoản Zalo gửi tin (Account Selection)
-      default: "+84868837123"
-      selector:
-        text: {}
-
-    zalo_type:
-      name: Loại thread Zalo
-      description: Áp dụng chung cho tất cả các Thread ID bên dưới
-      default: "1"
-      selector:
-        select:
-          mode: list
-          options:
-            - label: "Group (nhóm)"
-              value: "1"
-            - label: "User (cá nhân)"
-              value: "0"
-
-    zalo_thread_ids:
-      name: Danh sách Zalo Thread ID nhận tin
-      description: Bấm nút "+ Thêm mục" để dán thêm Thread ID của Zalo thứ 2, 3...
+    zalo_list:
+      name: Danh sách Zalo nhận tin
+      description: Bấm nút "Thêm mục" bên dưới để thêm người/nhóm Zalo nhận tin.
       default:
-        - "1058896116335801995"
+        - thread_id: "1058896116335801995"
+          account: "+84868837123"
+          type: "1"
       selector:
-        text:
+        object:
           multiple: true
+          fields:
+            thread_id:
+              name: Thread ID
+              description: ID của người dùng hoặc nhóm Zalo
+              selector:
+                text: {}
+            account:
+              name: Số điện thoại gửi (Account)
+              default: "+84868837123"
+              selector:
+                text: {}
+            type:
+              name: Loại Thread
+              default: "1"
+              selector:
+                select:
+                  mode: list
+                  options:
+                    - label: "Group (nhóm)"
+                      value: "1"
+                    - label: "User (cá nhân)"
+                      value: "0"
 
 trigger:
   - trigger: time_pattern
@@ -88,15 +93,15 @@ action:
           title: "Cảnh báo bão"
           message: "{{ ket_qua.message_short }}"
 
-      # 2. Tự động lặp qua từng Thread ID trong danh sách để gửi tin
+      # 2. Tự động lặp qua từng mục Zalo trong danh sách
       - repeat:
-          for_each: "!input zalo_thread_ids"
+          for_each: "!input zalo_list"
           sequence:
             - action: zalo_bot.send_message
               data:
-                thread_id: "{{ repeat.item }}"
-                account_selection: !input zalo_account
-                type: !input zalo_type
+                thread_id: "{{ repeat.item.thread_id }}"
+                account_selection: "{{ repeat.item.account }}"
+                type: "{{ repeat.item.type }}"
                 message: "{{ ket_qua.message }}"
 
 mode: single
