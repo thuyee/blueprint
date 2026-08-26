@@ -414,28 +414,28 @@ action:
         Ghép các mục sau, MỖI MỤC cách nhau đúng 1 dòng trống. Bỏ hẳn mục nào
         không có nội dung (không để tiêu đề trống, không viết "không có").
 
-        🔴 LỜI CHÀO
+        
         1 câu chào buổi sáng ngắn gọn, truyền cảm hứng.
 
-        🔴 THỜI TIẾT
+          THỜI TIẾT
         Nhận xét thời tiết/môi trường, gợi ý trang phục, cảnh báo an toàn
         nếu chỉ số bất thường (CO cao, mưa lớn, AQI xấu...).
 
-        🔴 LỊCH & CÔNG VIỆC
+          LỊCH & CÔNG VIỆC
         (chỉ thêm mục này nếu có lịch hoặc todo) Liệt kê theo thứ tự thời
         gian, việc quá hạn nhắc riêng, sự kiện đặc biệt (sinh nhật...) nêu
         bật.
 
-        🔴 TIN TỨC HÔM NAY
+          TIN TỨC HÔM NAY
         (chỉ thêm mục này nếu có tin) Mỗi tin 1-2 câu, giữ emoji chủ đề ở
         đầu mỗi tin, mỗi tin xuống dòng riêng.
 
-        🔴 LỜI KẾT
+        
         1 câu chúc kết thúc ngắn gọn.
 
         # ĐỊNH DẠNG ĐẦU RA
         - Tiếng Việt tự nhiên, câu văn mạch lạc, đúng ngữ pháp.
-        - Giữ ĐÚNG format tiêu đề "🔴 TÊN MỤC" viết hoa như trên, xuống dòng
+        - Giữ ĐÚNG format tiêu đề "ÊN MỤC" viết hoa như trên, xuống dòng
           ngay sau tiêu đề, rồi mới đến nội dung.
         - Giữa các mục cách nhau 1 dòng trống để dễ đọc trên Zalo.
         - Trong mỗi mục, viết đoạn văn ngắn hoặc mỗi ý 1 dòng — KHÔNG dùng
