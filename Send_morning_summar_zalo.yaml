@@ -97,7 +97,7 @@ blueprint:
           step: 1
       default: 24
 
-    # LƯU Ý: Cần đã tạo sẵn script "Perform Google Search" (entity_id: script.perform_google_search_2)
+    # LƯU Ý: Cần đã tạo sẵn script "Perform Google Search" (entity_id: script.perform_google_search)
     # theo blueprint của luuquangvu. Automation này sẽ gọi trực tiếp script đó để lấy tin tức THẬT,
     # thay vì để AI tổng hợp tự quyết định có tìm kiếm hay không.
 
@@ -129,7 +129,7 @@ blueprint:
         - Ensure correct grammar and meaningful sentence structure.
         - Use paragraphs to organize different sections (weather, calendar, tasks).
         - Check state all weather & environmental devices/sensors provided.
-        - Bản tin chi tiết về các tin nổi bật: sử dụng script.perform_google_search_2 để tìm kiếm các thông tin sau
+        - Bản tin chi tiết về các tin nổi bật: sử dụng script.perform_google_search để tìm kiếm các thông tin sau
           🌧️ Thời tiết, bão, áp thấp, thiên tai nếu có
           💰 Kinh tế
           🔥 Sự kiện nổi bật
@@ -271,7 +271,7 @@ action:
       - conditions:
           - "{{ enable_daily_news }}"
         sequence:
-          - service: script.perform_google_search_2
+          - service: script.perform_google_search
             data:
               query_string: >-
                 Tìm tin tức Việt Nam mới nhất trong {{ news_lookback_hours }} giờ qua, tách riêng theo 3 mục sau và ghi rõ tiêu đề mục trước mỗi phần:
@@ -282,7 +282,7 @@ action:
               language: "vi-VN"
             response_variable: search_group1
 
-          - service: script.perform_google_search_2
+          - service: script.perform_google_search
             data:
               query_string: >-
                 Tìm tin tức Việt Nam mới nhất trong {{ news_lookback_hours }} giờ qua, tách riêng theo 2 mục sau và ghi rõ tiêu đề mục trước mỗi phần:
