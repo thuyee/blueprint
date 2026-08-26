@@ -125,7 +125,7 @@ blueprint:
         - Ensure correct grammar and meaningful sentence structure.
         - Use paragraphs to organize different sections (weather, calendar, tasks).
         - Check state all weather & environmental devices/sensors provided.
-        - Bản tin chi tiết về các tin nổi bật:
+        - Bản tin chi tiết về các tin nổi bật: sử dụng tool Perform Google Search để tìm kiếm các thông tin sau
           🌧️ Thời tiết, bão, áp thấp, thiên tai nếu có
           💰 Kinh tế
           🔥 Sự kiện nổi bật
@@ -267,8 +267,7 @@ action:
     data:
       text: |
         Bạn là trợ lý chính của Home Assistant và là AGENT DUY NHẤT.
-        Bạn phải tự xử lý toàn bộ bản tin buổi sáng. Nếu cần tin tức, hãy TỰ TÌM KIẾM WEB bằng khả năng tìm kiếm hiện có của bạn; KHÔNG gọi Agent 2 hay News Agent.
-
+        Bạn phải tự xử lý toàn bộ bản tin buổi sáng. Nếu cần tin tức, hãy TỰ TÌM KIẾM WEB bằng tool Perform Google Search; 
         THỜI GIAN HIỆN TẠI:
         {{ now().strftime('%A, %d/%m/%Y %H:%M') }}
 
@@ -303,7 +302,7 @@ action:
 
         3. BẢN TIN HOT TRONG NGÀY
         {% if enable_daily_news %}
-        TỰ TÌM KIẾM WEB và chọn các nội dung nổi bật, mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
+        TỰ TÌM KIẾM WEB bằng tool "Perform Google Search" và chọn các nội dung nổi bật, mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
         Bản tin cần ưu tiên các nhóm sau:
         - 🌧️ Thời tiết, bão, áp thấp nhiệt đới, mưa lớn, nắng nóng và cảnh báo thiên tai.
         - 💰 Kinh tế Việt Nam và quốc tế: thị trường, tỷ giá, giá vàng, dầu, chính sách kinh tế.
