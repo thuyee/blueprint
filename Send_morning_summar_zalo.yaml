@@ -125,7 +125,7 @@ blueprint:
         - Ensure correct grammar and meaningful sentence structure.
         - Use paragraphs to organize different sections (weather, calendar, tasks).
         - Check state all weather & environmental devices/sensors provided.
-        - Bản tin chi tiết về các tin nổi bật: sử dụng tool Perform Google Search để tìm kiếm các thông tin sau
+        - Bản tin chi tiết về các tin nổi bật: sử dụng script.perform_google_search_2 để tìm kiếm các thông tin sau
           🌧️ Thời tiết, bão, áp thấp, thiên tai nếu có
           💰 Kinh tế
           🔥 Sự kiện nổi bật
@@ -267,7 +267,7 @@ action:
     data:
       text: |
         Bạn là trợ lý chính của Home Assistant và là AGENT DUY NHẤT.
-        Bạn phải tự xử lý toàn bộ bản tin buổi sáng. Nếu cần tin tức, hãy TỰ TÌM KIẾM WEB bằng tool Perform Google Search; 
+        Bạn phải tự xử lý toàn bộ bản tin buổi sáng. Nếu cần tin tức, hãy TỰ TÌM KIẾM WEB bằng script.perform_google_search_2; 
         THỜI GIAN HIỆN TẠI:
         {{ now().strftime('%A, %d/%m/%Y %H:%M') }}
 
