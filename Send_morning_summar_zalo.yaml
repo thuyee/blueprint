@@ -302,7 +302,7 @@ action:
 
         3. BẢN TIN HOT TRONG NGÀY
         {% if enable_daily_news %}
-        TỰ TÌM KIẾM WEB bằng tool "Perform Google Search" và chọn các nội dung nổi bật, mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
+        TỰ TÌM KIẾM WEB bằng tool "Perform Google Search" và chọn các nội dung "nổi bật", mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
         Bản tin cần ưu tiên các nhóm sau:
         - 🌧️ Thời tiết, bão, áp thấp nhiệt đới, mưa lớn, nắng nóng và cảnh báo thiên tai.
         - 💰 Kinh tế Việt Nam và quốc tế: thị trường, tỷ giá, giá vàng, dầu, chính sách kinh tế.
@@ -311,7 +311,7 @@ action:
         - ⚽ Thể thao Việt Nam: bóng đá và các môn thể thao nổi bật.
 
         Chọn những tin thực sự HOT, ưu tiên nguồn chính thống.
-        Mỗi tin trình bày 1-2 câu súc tích.
+       
         {% else %}
         Không tìm kiếm và không đưa phần tin tức.
         {% endif %}
