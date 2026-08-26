@@ -2,7 +2,7 @@ blueprint:
   name: Send summary to Zalo + Speaker (DLNA Stable Full - Extended Weather/Sensors)
   domain: automation
   author: smarthomeblack + GPT
-  description: Morning summary with extended weather/environmental sensors, calendar, todo, news, and speaker/Zalo notification.
+  description: Morning summary with  weather/environmental sensors, calendar, todo, news, and speaker/Zalo notification.
 
   input:
     notify_time:
