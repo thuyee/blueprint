@@ -321,9 +321,10 @@ action:
         - Phân đoạn thời tiết, môi trường & khuyến nghị trang phục/an toàn.
         - Phân đoạn Lịch & Công việc (dùng đoạn văn hoặc danh sách ngắn).
         - Phân đoạn Bản tin hot.
-        - Kết thúc ngắn gọn.
+        - Kết thúc bằng lời chúc ngắn gọn.
         - Chèn emoji hợp lý để tin nhắn sinh động.
         - Tránh bảng biểu hoặc markdown quá phức tạp để đọc TTS và gửi Zalo mượt mà.
+        - trình bày rõ ràng, rành mạch , ngắt câu ngắt dòng , xuống dòng chính xác
       agent_id: !input conversation_agent
     response_variable: agent
 
