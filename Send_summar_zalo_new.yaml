@@ -1,12 +1,8 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (v2 - Editable Prompt + News Agent)
+  name: Send summary to Zalo + Speaker (DLNA Stable Full - Extended Weather/Sensors)
   domain: automation
   author: smarthomeblack + GPT
-  description: >-
-    Bản tin buổi sáng: thời tiết/môi trường, lịch, công việc, và tin tức nổi
-    bật. Agent 2 chuyên tìm tin tức (dùng công cụ "Perform Google Search"),
-    Agent chính chỉ nhận tin có sẵn để soạn văn — không tự tìm kiếm. Gửi qua
-    Zalo và đọc qua loa (báo thức + TTS).
+  description: Morning summary with extended weather/environmental sensors, calendar, todo, news, and speaker/Zalo notification.
 
   input:
     notify_time:
@@ -55,7 +51,6 @@ blueprint:
           multiple: true
           filter:
             - domain: calendar
-      default: []
 
     calendar_duration:
       selector:
@@ -71,12 +66,10 @@ blueprint:
             - domain: todo
       default: []
 
+    # Cập nhật chọn nhiều domain liên quan đến thời tiết & môi trường
     weather_entities:
       name: Weather & Environmental Entities
-      description: >-
-        Chọn các entity thời tiết (weather) hoặc cảm biến liên quan
-        (sensor/binary_sensor như nồng độ CO, cảm biến mưa, AQI, cảnh báo
-        thời tiết cực đoan...).
+      description: Chọn các entity thời tiết (weather) hoặc cảm biến liên quan (sensor/binary_sensor như nồng độ CO, cảm biến mưa, AQI, cảnh báo thời tiết cực đoan...).
       selector:
         entity:
           multiple: true
@@ -89,25 +82,10 @@ blueprint:
     # ===== DAILY HOT NEWS =====
     enable_daily_news:
       name: Enable Daily Hot News
-      description: >-
-        Bật/tắt phần tin tức trong bản tin. Cần chọn "Agent 2 - Chuyên tìm
-        tin tức" bên dưới thì phần này mới hoạt động — Agent chính không tự
-        tìm kiếm, chỉ nhận tin đã tìm sẵn từ Agent 2.
+      description: Cho AI tự tìm và tóm tắt các tin nổi bật trong ngày.
       selector:
         boolean: {}
       default: true
-
-    news_search_agent:
-      name: "Agent 2 - Chuyên tìm tin tức"
-      description: >-
-        Agent này được gọi RIÊNG để tìm và tóm tắt tin tức bằng công cụ
-        "Perform Google Search" trước, sau đó kết quả mới đưa cho Agent
-        chính soạn bản tin hoàn chỉnh. Agent chính KHÔNG tự tìm kiếm nữa —
-        chỉ nhận tin có sẵn để viết văn. Nếu để trống, phần tin tức sẽ được
-        bỏ qua hoàn toàn (dù bật Enable Daily Hot News).
-      selector:
-        conversation_agent: {}
-      default: ""
 
     news_lookback_hours:
       name: News Lookback Hours
@@ -119,60 +97,40 @@ blueprint:
           step: 1
       default: 24
 
-    news_categories:
-      name: News Categories
-      description: Các chủ đề tin tức muốn AI tìm kiếm và đưa vào bản tin.
-      selector:
-        select:
-          multiple: true
-          options:
-            - label: "🌧️ Thời tiết / thiên tai"
-              value: weather
-            - label: "💰 Kinh tế"
-              value: economy
-            - label: "🔥 Sự kiện nổi bật"
-              value: highlights
-            - label: "🏛️ Chính trị"
-              value: politics
-            - label: "⚽ Thể thao Việt Nam"
-              value: sports
-      default: [weather, economy, highlights, politics, sports]
-
-    conversation_agent:
-      name: "Agent chính - Soạn bản tin"
-      selector:
-        conversation_agent: {}
-
-    prompt:
-      name: Prompt (có thể chỉnh sửa)
-      description: >-
-        Yêu cầu chi tiết cho Agent chính về giọng văn, nội dung, độ dài...
-        Anh có thể thêm/bớt thoải mái ở đây mà không cần sửa blueprint gốc.
-        Phần cấu trúc bắt buộc (thời tiết, lịch, tin tức...) vẫn được chèn
-        tự động phía trên/dưới nội dung này.
-      selector:
-        text:
-          multiline: true
-      default: >-
-        - Giọng văn ấm áp, gần gũi như người thân nhắc nhở buổi sáng, tạo động
-          lực cho cả ngày.
-        - Đưa ra nhận xét thời tiết phù hợp mùa, kèm gợi ý trang phục cụ thể
-          (quần dài/ngắn, áo khoác/áo phông, có cần mang ô không).
-        - Chỉ nhắc lịch/cuộc hẹn nếu thực sự có, liệt kê theo thứ tự thời
-          gian kèm ngày giờ rõ ràng. Không nhắc nếu không có lịch nào.
-        - Nếu có việc todo, tóm tắt việc quan trọng nhất, ưu tiên theo hạn
-          chót; nhắc riêng nếu có việc quá hạn.
-        - Nêu bật ngày đặc biệt nếu có (sinh nhật, kỷ niệm).
-        - Thêm emoji vừa phải cho sinh động, không lạm dụng.
-        - Ngữ pháp chuẩn, câu văn mạch lạc, chia đoạn rõ ràng theo từng chủ
-          đề (thời tiết, lịch/công việc, tin tức).
-
     custom_footer:
-      name: Footer / ghi chú thêm (tuỳ chọn)
       selector:
         text:
           multiline: true
       default: ""
+
+    conversation_agent:
+      selector:
+        conversation_agent: {}
+
+    prompt:
+      selector:
+        text:
+          multiline: true
+      default: >-
+        Please generate a friendly morning summary message in Vietnamese for the user.
+        - Your responses should always be helpful, warm, and informative.
+        - Avoid technical details or specific system information.
+        - Compose messages to motivate the user.
+        - Include notes on exceptional weather suitable for the season, with recommendations on what to wear today (e.g., long pants, shorts, (light) jacket, sweater).
+        - Mention upcoming meetings or appointments only if they exist. List events chronologically, showing the date and time.
+        - Do not inform about the absence of appointments.
+        - If you have a to-do list, summarize the most important tasks for the day. Prioritize them by due date. If any tasks are overdue, remind the user.
+        - Highlight special occasions such as birthdays or anniversaries.
+        - Add emojis to make the message more engaging.
+        - Ensure correct grammar and meaningful sentence structure.
+        - Use paragraphs to organize different sections (weather, calendar, tasks).
+        - Check state all weather & environmental devices/sensors provided.
+        - Bản tin chi tiết về các tin nổi bật:
+          🌧️ Thời tiết, bão, áp thấp, thiên tai nếu có
+          💰 Kinh tế
+          🔥 Sự kiện nổi bật
+          🏛️ Chính trị
+          ⚽ Thể thao Việt Nam
 
     # ===== SPEAKER =====
     speaker:
@@ -252,261 +210,187 @@ trigger:
   - platform: time
     at: !input notify_time
 
-variables:
-  weather_entities: !input weather_entities
-  enable_daily_news: !input enable_daily_news
-  news_search_agent: !input news_search_agent
-  news_lookback_hours: !input news_lookback_hours
-  news_categories: !input news_categories
-  calendar_entity: !input calendar_entity
-  todo_entity: !input todo_entity
-  calendar_duration: !input calendar_duration
-  prompt: !input prompt
-  custom_footer: !input custom_footer
-  speaker: !input speaker
-  enable_zalo: !input enable_zalo
-  enable_alarm: !input enable_alarm
-  enable_tts: !input enable_tts
-  alarm_url: !input alarm_url
-  alarm_repeat: !input alarm_repeat
-  alarm_duration: !input alarm_duration
-  alarm_volume: !input alarm_volume
-  delay_before_tts: !input delay_before_tts
-  tts_engine: !input tts_engine
-  tts_volume: !input tts_volume
-  # Danh sách truy vấn tìm kiếm theo từng chủ đề đã chọn (dùng chung cho cả
-  # Agent 2 lẫn Agent chính khi tự tìm kiếm)
-  news_queries: >-
-    {% set ns = namespace(lines=[]) %}
-    {% set today = now().strftime('%d/%m/%Y') %}
-    {% for cat in news_categories %}
-      {% if cat == 'weather' %}
-        {% set ns.lines = ns.lines + ['🌧️ Thời tiết/thiên tai: "tin bão áp thấp nhiệt đới thời tiết nguy hiểm Việt Nam hôm nay ' ~ today ~ '"'] %}
-      {% elif cat == 'economy' %}
-        {% set ns.lines = ns.lines + ['💰 Kinh tế: "tin kinh tế tỷ giá giá vàng chứng khoán Việt Nam hôm nay ' ~ today ~ '"'] %}
-      {% elif cat == 'highlights' %}
-        {% set ns.lines = ns.lines + ['🔥 Sự kiện nổi bật: "tin tức nổi bật Việt Nam hôm nay ' ~ today ~ '"'] %}
-      {% elif cat == 'politics' %}
-        {% set ns.lines = ns.lines + ['🏛️ Chính trị: "tin chính trị Việt Nam quốc tế hôm nay ' ~ today ~ '"'] %}
-      {% elif cat == 'sports' %}
-        {% set ns.lines = ns.lines + ['⚽ Thể thao: "tin thể thao bóng đá Việt Nam hôm nay ' ~ today ~ '"'] %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.lines | join('\n') }}
-
 action:
-  # ===== TỔNG HỢP DỮ LIỆU THỜI TIẾT & CẢM BIẾN (bỏ qua entity unavailable/unknown) =====
+  - variables:
+      weather_entities: !input weather_entities
+      enable_daily_news: !input enable_daily_news
+      news_lookback_hours: !input news_lookback_hours
+      calendar_entity: !input calendar_entity
+      todo_entity: !input todo_entity
+      calendar_duration: !input calendar_duration
+      prompt: !input prompt
+      custom_footer: !input custom_footer
+      speaker: !input speaker
+      enable_zalo: !input enable_zalo
+      enable_alarm: !input enable_alarm
+      enable_tts: !input enable_tts
+      alarm_url: !input alarm_url
+      alarm_repeat: !input alarm_repeat
+      alarm_duration: !input alarm_duration
+      alarm_volume: !input alarm_volume
+      delay_before_tts: !input delay_before_tts
+      tts_engine: !input tts_engine
+      tts_volume: !input tts_volume
+
+  # TỔNG HỢP DỮ LIỆU CÁC ENTITY THỜI TIẾT & CẢM BIẾN MÔI TRƯỜNG
   - variables:
       weather_summary: >-
         {% set ns = namespace(lines=[]) %}
         {% for entity in weather_entities %}
           {% set state_val = states(entity) %}
-          {% if state_val not in ['unknown', 'unavailable', 'none', ''] %}
-            {% set name_val = state_attr(entity, 'friendly_name') or entity %}
-            {% set unit_val = state_attr(entity, 'unit_of_measurement') or '' %}
-            {% set ns.lines = ns.lines + [name_val ~ ': ' ~ state_val ~ ' ' ~ unit_val] %}
-          {% endif %}
+          {% set name_val = state_attr(entity, 'friendly_name') or entity %}
+          {% set unit_val = state_attr(entity, 'unit_of_measurement') or '' %}
+          {% set line = name_val ~ ' (' ~ entity ~ '): ' ~ state_val ~ ' ' ~ unit_val %}
+          {% set ns.lines = ns.lines + [line] %}
         {% endfor %}
-        {{ ns.lines | join('\n') if ns.lines else 'Không có dữ liệu cảm biến.' }}
+        {{ ns.lines | join('\n') }}
 
-  # ===== CALENDAR (chỉ gọi nếu có entity được chọn, tránh lỗi service call rỗng) =====
-  - if:
-      - condition: template
-        value_template: "{{ calendar_entity | length > 0 }}"
-    then:
-      - service: calendar.get_events
-        data:
-          duration: !input calendar_duration
-        target:
-          entity_id: !input calendar_entity
-        response_variable: calendar_response
-    else:
-      - variables:
-          calendar_response: {}
+  # ===== CALENDAR =====
+  - service: calendar.get_events
+    data:
+      duration: !input calendar_duration
+    target:
+      entity_id: !input calendar_entity
+    response_variable: calendar_response
 
-  # ===== TODO (chỉ gọi nếu có entity được chọn) =====
-  - if:
-      - condition: template
-        value_template: "{{ todo_entity | length > 0 }}"
-    then:
-      - service: todo.get_items
-        data:
-          status:
-            - needs_action
-        target:
-          entity_id: !input todo_entity
-        response_variable: todo_response
-    else:
-      - variables:
-          todo_response: {}
+  # ===== TODO =====
+  - service: todo.get_items
+    data:
+      status:
+        - needs_action
+    target:
+      entity_id: !input todo_entity
+    response_variable: todo_response
 
-  # ===== AGENT 2: TÌM TIN TỨC RIÊNG (chỉ chạy nếu bật tin tức VÀ có chọn Agent 2) =====
-  - if:
-      - condition: template
-        value_template: "{{ enable_daily_news and news_search_agent not in [none, ''] }}"
-    then:
-      - service: conversation.process
-        data:
-          agent_id: "{{ news_search_agent }}"
-          language: vi
-          text: >-
-            Bạn là trợ lý TÌM KIẾM TIN TỨC. Dùng công cụ "Perform Google
-            Search" để tra cứu tin THẬT, KHÔNG bịa tin, KHÔNG dùng kiến thức
-            cũ đã huấn luyện. Chỉ ưu tiên tin trong {{ news_lookback_hours }}
-            giờ gần nhất, từ báo chí chính thống Việt Nam (VnExpress, Tuổi
-            Trẻ, Thanh Niên, Znews, VTV, TTXVN...).
-
-            Thực hiện MỘT lượt gọi "Perform Google Search" riêng cho từng
-            chủ đề bên dưới, sau đó chọn 1 tin đáng chú ý nhất mỗi chủ đề:
-
-            {{ news_queries }}
-
-            Trả lời CHỈ gồm danh sách tin đã tóm tắt (1-2 câu/tin, giữ emoji
-            chủ đề ở đầu mỗi tin). Nếu chủ đề nào không tìm được tin phù hợp
-            thì bỏ qua, không viết gì thêm, không lời chào hay dẫn nhập.
-        response_variable: news_agent_response
-      - variables:
-          news_summary: "{{ news_agent_response.response.speech.plain.speech }}"
-    else:
-      - variables:
-          news_summary: ""
-
-  # ===== AGENT CHÍNH: SOẠN BẢN TIN =====
+  # ===== AI SUMMARY =====
   - service: conversation.process
     data:
-      agent_id: !input conversation_agent
-      language: vi
       text: |
-        # VAI TRÒ
-        Bạn là trợ lý AI soạn bản tin buổi sáng cho gia đình, đọc qua loa
-        (TTS) và gửi qua Zalo.
+        Bạn là trợ lý chính của Home Assistant và là AGENT DUY NHẤT.
+        Bạn phải tự xử lý toàn bộ bản tin buổi sáng. Nếu cần tin tức, hãy TỰ TÌM KIẾM WEB bằng khả năng tìm kiếm hiện có của bạn; KHÔNG gọi Agent 2 hay News Agent.
 
-        # THỜI GIAN HIỆN TẠI
+        THỜI GIAN HIỆN TẠI:
         {{ now().strftime('%A, %d/%m/%Y %H:%M') }}
 
-        # DỮ LIỆU HỆ THỐNG (từ Home Assistant — dùng để phân tích, KHÔNG đọc nguyên văn)
-        ## Thời tiết & cảm biến môi trường
+        DỮ LIỆU THỜI TIẾT VÀ CẢM BIẾN MÔI TRƯỜNG TỪ HOME ASSISTANT:
         {{ weather_summary }}
 
-        ## Lịch (trong {{ calendar_duration }} tới)
+        LỊCH:
         {{ calendar_response }}
 
-        ## Việc cần làm (todo, chưa hoàn thành)
+        TODO:
         {{ todo_response }}
 
-        # TIN TỨC
-        {% if not enable_daily_news or news_search_agent in [none, ''] %}
-        Không có phần tin tức trong lần này — bỏ qua, không được tự bịa tin
-        hoặc tự tìm kiếm.
-        {% else %}
-        Tin dưới đây đã được một agent khác tìm kiếm và tóm tắt sẵn bằng dữ
-        liệu THẬT. Bạn CHỈ được đưa nguyên các tin này vào bản tin theo đúng
-        giọng văn chung — KHÔNG tự tìm kiếm thêm, KHÔNG bịa thêm tin, KHÔNG
-        thay đổi sự kiện/số liệu đã cho:
-        {{ news_summary if news_summary else 'Agent tìm tin không trả về kết quả nào — bỏ qua phần tin tức, không giải thích lý do.' }}
-        {% endif %}
-
-        # YÊU CẦU VỀ NỘI DUNG & VĂN PHONG
+        YÊU CẦU RIÊNG CỦA NGƯỜI DÙNG:
         {{ prompt }}
+
+        GHI CHÚ THÊM:
         {{ custom_footer }}
 
-        # CẤU TRÚC BẢN TIN (bắt buộc theo đúng thứ tự, đúng tiêu đề mục)
-        Ghép các mục sau, MỖI MỤC cách nhau đúng 1 dòng trống. Bỏ hẳn mục nào
-        không có nội dung (không để tiêu đề trống, không viết "không có").
+        ===== NHIỆM VỤ =====
+        Hãy tạo một bản tin buổi sáng bằng tiếng Việt, tự nhiên, thân thiện và dễ nghe khi đọc qua TTS.
 
-        
-        1 câu chào buổi sáng ngắn gọn, truyền cảm hứng.
+        1. THỜI TIẾT VÀ CẢNH BÁO MÔI TRƯỜNG
+        - Phân tích toàn bộ danh sách entity thời tiết và các cảm biến môi trường được cung cấp (nhiệt độ, mưa, chất lượng không khí, nồng độ CO, cảnh báo thời tiết cực đoan...).
+        - Đưa ra đánh giá tổng quan và chi tiết về tình hình thời tiết/môi trường xung quanh.
+        - ĐẶC BIỆT: Nếu phát hiện các chỉ số bất thường hoặc nguy hiểm (như nồng độ CO cao, mưa lớn, thời tiết cực đoan, chỉ số ô nhiễm cao...), phải đưa ra CẢNH BÁO NỔI BẬT ngay lập tức.
+        - Đưa ra lời khuyên trang phục thích hợp (áo khoác, quần dài, áo phông...) và các khuyến nghị an toàn thực tế (ví dụ: bật quạt thông gió nếu CO cao, đóng cửa sổ khi ô nhiễm/mưa, mang theo ô/áo mưa...).
 
-          THỜI TIẾT
-        Nhận xét thời tiết/môi trường, gợi ý trang phục, cảnh báo an toàn
-        nếu chỉ số bất thường (CO cao, mưa lớn, AQI xấu...).
+        2. LỊCH VÀ TODO
+        - Tóm tắt các lịch quan trọng trong ngày theo thứ tự thời gian. Không báo nếu không có lịch.
+        - Nhắc các việc TODO cần hoàn thành, ưu tiên việc quá hạn hoặc sát giờ.
+        - Nhắc nhở các sự kiện đặc biệt nếu có (sinh nhật, kỷ niệm...).
 
-          LỊCH & CÔNG VIỆC
-        (chỉ thêm mục này nếu có lịch hoặc todo) Liệt kê theo thứ tự thời
-        gian, việc quá hạn nhắc riêng, sự kiện đặc biệt (sinh nhật...) nêu
-        bật.
+        3. BẢN TIN HOT TRONG NGÀY
+        {% if enable_daily_news %}
+        TỰ TÌM KIẾM WEB và chọn các nội dung nổi bật, mới trong khoảng {{ news_lookback_hours }} giờ gần nhất.
+        Bản tin cần ưu tiên các nhóm sau:
+        - 🌧️ Thời tiết, bão, áp thấp nhiệt đới, mưa lớn, nắng nóng và cảnh báo thiên tai.
+        - 💰 Kinh tế Việt Nam và quốc tế: thị trường, tỷ giá, giá vàng, dầu, chính sách kinh tế.
+        - 🔥 Sự kiện nổi bật trong ngày.
+        - 🏛️ Chính trị: các diễn biến chính trị nổi bật từ nguồn uy tín.
+        - ⚽ Thể thao Việt Nam: bóng đá và các môn thể thao nổi bật.
 
-          TIN TỨC HÔM NAY
-        (chỉ thêm mục này nếu có tin) Mỗi tin 1-2 câu, giữ emoji chủ đề ở
-        đầu mỗi tin, mỗi tin xuống dòng riêng.
+        Chọn những tin thực sự HOT, ưu tiên nguồn chính thống.
+        Mỗi tin trình bày 1-2 câu súc tích.
+        {% else %}
+        Không tìm kiếm và không đưa phần tin tức.
+        {% endif %}
 
-        
-        1 câu chúc kết thúc ngắn gọn.
-
-        # ĐỊNH DẠNG ĐẦU RA
-        - Tiếng Việt tự nhiên, câu văn mạch lạc, đúng ngữ pháp.
-        - Giữ ĐÚNG format tiêu đề "ÊN MỤC" viết hoa như trên, xuống dòng
-          ngay sau tiêu đề, rồi mới đến nội dung.
-        - Giữa các mục cách nhau 1 dòng trống để dễ đọc trên Zalo.
-        - Trong mỗi mục, viết đoạn văn ngắn hoặc mỗi ý 1 dòng — KHÔNG dùng
-          markdown (không *, #, dấu gạch đầu dòng "-") vì bản tin còn được
-          đọc qua TTS, chỉ dùng emoji và xuống dòng để phân đoạn.
-        - Độ dài vừa đủ, súc tích, ưu tiên chất lượng hơn số lượng.
+        4. CẤU TRÚC ĐẦU RA
+        - Lời chào buổi sáng ấm áp, truyền cảm hứng.
+        - Phân đoạn thời tiết, môi trường & khuyến nghị trang phục/an toàn.
+        - Phân đoạn Lịch & Công việc (dùng đoạn văn hoặc danh sách ngắn).
+        - Phân đoạn Bản tin hot.
+        - Kết thúc ngắn gọn.
+        - Chèn emoji hợp lý để tin nhắn sinh động.
+        - Tránh bảng biểu hoặc markdown quá phức tạp để đọc TTS và gửi Zalo mượt mà.
+      agent_id: !input conversation_agent
     response_variable: agent
 
   # ===== SEND ZALO =====
-  - if:
-      - condition: template
-        value_template: "{{ enable_zalo }}"
-    then:
-      - service: zalo_bot.send_message
-        data:
-          message: "{{ agent.response.speech.plain.speech }}"
-          thread_id: !input zalo_thread_id
-          account_selection: !input zalo_account_selection
-          type: !input zalo_type
-          ttl: !input zalo_ttl
+  - choose:
+      - conditions:
+          - "{{ enable_zalo }}"
+        sequence:
+          - service: zalo_bot.send_message
+            data:
+              message: "{{ agent.response.speech.plain.speech }}"
+              thread_id: !input zalo_thread_id
+              account_selection: !input zalo_account_selection
+              type: !input zalo_type
+              ttl: !input zalo_ttl
 
   # ===== ALARM LOOP (DLNA STABLE) =====
-  - if:
-      - condition: template
-        value_template: "{{ enable_alarm and speaker != '' }}"
-    then:
-      - service: media_player.volume_set
-        target:
-          entity_id: "{{ speaker }}"
-        data:
-          volume_level: "{{ alarm_volume }}"
+  - choose:
+      - conditions:
+          - "{{ enable_alarm and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ alarm_volume }}"
 
-      - repeat:
-          count: "{{ alarm_repeat }}"
-          sequence:
-            - service: media_player.play_media
-              target:
-                entity_id: "{{ speaker }}"
-              data:
-                media_content_id: "{{ alarm_url }}"
-                media_content_type: music
+          - repeat:
+              count: "{{ alarm_repeat }}"
+              sequence:
+                - service: media_player.play_media
+                  target:
+                    entity_id: "{{ speaker }}"
+                  data:
+                    media_content_id: "{{ alarm_url }}"
+                    media_content_type: music
 
-            - delay:
-                seconds: "{{ alarm_duration }}"
+                - delay:
+                    seconds: "{{ alarm_duration }}"
 
-            - service: media_player.media_stop
-              target:
-                entity_id: "{{ speaker }}"
+                - service: media_player.media_stop
+                  target:
+                    entity_id: "{{ speaker }}"
 
-            - delay: "00:00:01"
+                - delay: "00:00:01"
 
   # ===== DELAY BEFORE TTS =====
   - delay:
       seconds: "{{ delay_before_tts }}"
 
   # ===== TTS =====
-  - if:
-      - condition: template
-        value_template: "{{ enable_tts and speaker != '' }}"
-    then:
-      - service: media_player.volume_set
-        target:
-          entity_id: "{{ speaker }}"
-        data:
-          volume_level: "{{ tts_volume }}"
+  - choose:
+      - conditions:
+          - "{{ enable_tts and speaker != '' }}"
+        sequence:
+          - service: media_player.volume_set
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              volume_level: "{{ tts_volume }}"
 
-      - service: tts.speak
-        target:
-          entity_id: !input tts_engine
-        data:
-          media_player_entity_id: "{{ speaker }}"
-          message: "{{ agent.response.speech.plain.speech }}"
+          - service: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: "{{ speaker }}"
+              message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single
