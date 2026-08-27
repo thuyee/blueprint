@@ -1,0 +1,9 @@
+# Requires for telegram_bot_handle_tool.py and zalo_bot_handle_tool.py
+h2
+
+# Requires for youtube_data_tool.py
+google-api-python-client
+
+# Requires for traffic_fine_lookup_tool.py
+beautifulsoup4
+curl-cffi
