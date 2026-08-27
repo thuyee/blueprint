@@ -1,0 +1,78 @@
+blueprint:
+  name: "Tra cứu thành viên gia phả (Cây Gia Phả)"
+  description: >
+    Tool cho Trợ lý thoại / AI Agent tra cứu ĐẦY ĐỦ thông tin một thành viên
+    trong gia phả từ tích hợp "Cây Gia Phả": giới tính, ngày sinh, ngày mất
+    (giỗ), tuổi, thế hệ, con thứ, cha, mẹ, vợ/chồng, anh chị em ruột, ghi chú.
+    Expose script tạo từ blueprint này cho Assist thay vì expose trực tiếp
+    các sensor cá nhân, vì Assist chỉ đọc state + whitelist attribute hẹp,
+    không đọc được các attribute tùy biến (cha, mẹ, vợ, anh chị em...).
+  domain: script
+  input:
+    include_ghi_chu:
+      name: Đọc cả "Ghi chú"
+      description: Có đưa nội dung field "details" (ghi chú riêng) vào kết quả trả lời hay không.
+      default: true
+      selector:
+        boolean:
+    khong_tim_thay_message:
+      name: Thông báo khi không tìm thấy
+      description: Dùng {ten} làm chỗ chèn tên đã tìm.
+      default: 'Không tìm thấy thành viên nào tên "{ten}" trong gia phả.'
+      selector:
+        text:
+    nhieu_ket_qua_message:
+      name: Thông báo khi trùng nhiều người
+      description: Dùng {ten} và {danh_sach} làm chỗ chèn.
+      default: 'Tìm thấy nhiều người trùng tên "{ten}": {danh_sach}. Hãy hỏi lại rõ hơn kèm tên cha/mẹ hoặc năm sinh.'
+      selector:
+        text:
+
+fields:
+  ten:
+    name: Tên thành viên
+    description: >
+      Họ tên đầy đủ hoặc một phần tên của thành viên cần tra cứu trong gia phả.
+    required: true
+    example: "Nguyễn Ngọc Quân"
+    selector:
+      text:
+
+sequence:
+  - variables:
+      tu_khoa: "{{ ten | trim }}"
+      bao_gom_ghi_chu: !input include_ghi_chu
+      mau_khong_tim_thay: !input khong_tim_thay_message
+      mau_nhieu_ket_qua: !input nhieu_ket_qua_message
+      danh_sach: >
+        {{ states.sensor
+             | selectattr('attributes.integration', 'defined')
+             | selectattr('attributes.integration', 'eq', 'cay_gia_pha')
+             | selectattr('attributes.full_name', 'defined')
+             | selectattr('attributes.full_name', 'search', tu_khoa, ignorecase=true)
+             | list }}
+  - variables:
+      ket_qua: >
+        {% if danh_sach | count == 0 %}
+        {{ mau_khong_tim_thay.replace('{ten}', tu_khoa) }}
+        {% elif danh_sach | count > 1 %}
+        {% set ten_list = danh_sach | map(attribute='attributes.full_name') | join(', ') %}
+        {{ mau_nhieu_ket_qua.replace('{ten}', tu_khoa).replace('{danh_sach}', ten_list) }}
+        {% else %}
+        {% set e = danh_sach[0].entity_id %}
+        Họ tên: {{ state_attr(e, 'full_name') }}
+        Giới tính: {{ state_attr(e, 'gender_name') }}
+        Trạng thái: {{ state_attr(e, 'status') }}
+        Ngày sinh: {{ state_attr(e, 'birth_date') }}
+        {% if state_attr(e, 'is_deceased') %}Ngày mất (giỗ): {{ state_attr(e, 'death_date') }}
+        {% endif %}Tuổi: {{ state_attr(e, 'age') }}
+        Thế hệ: {{ state_attr(e, 'level') }} - con thứ {{ state_attr(e, 'birth_order') }}
+        Quan hệ cha mẹ: {{ 'Con nuôi' if state_attr(e, 'is_adopted') else 'Con đẻ' }}
+        Cha: {{ state_attr(e, 'father') or 'Không rõ' }}
+        Mẹ: {{ state_attr(e, 'mother') or 'Không rõ' }}
+        Vợ/chồng: {{ (state_attr(e, 'spouse') | join(', ')) if state_attr(e, 'spouse') else 'Không có' }}
+        Anh chị em ruột: {{ (state_attr(e, 'siblings') | join(', ')) if state_attr(e, 'siblings') else 'Không có' }}
+        {% if bao_gom_ghi_chu and state_attr(e, 'details') %}Ghi chú: {{ state_attr(e, 'details') }}{% endif %}
+        {% endif %}
+  - stop: ""
+    response_variable: ket_qua
