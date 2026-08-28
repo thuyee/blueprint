@@ -87,11 +87,13 @@ sequence:
       cot_tim_kiem_raw: "{{ cau_hinh.get('cot_tim_kiem') }}"
       ten_bang_that: "{{ cau_hinh.bang }}"
   - variables:
+      tu_khoa_norm: "{{ tu_khoa_loc | replace('-', '') | replace(' ', '') }}"
+  - variables:
       dieu_kien_tim_kiem: >
         {% set cols = [cot_tim_kiem_raw] if cot_tim_kiem_raw is string else (cot_tim_kiem_raw or []) %}
         {% set ns3 = namespace(parts=[]) %}
         {% for c in cols %}
-          {% set ns3.parts = ns3.parts + [c ~ " ILIKE '%" ~ tu_khoa_loc ~ "%'"] %}
+          {% set ns3.parts = ns3.parts + ["REPLACE(REPLACE(" ~ c ~ ", '-', ''), ' ', '') ILIKE '%" ~ tu_khoa_norm ~ "%'"] %}
         {% endfor %}
         {{ '(' ~ (ns3.parts | join(' OR ')) ~ ')' if ns3.parts else '' }}
   - variables:
