@@ -31,7 +31,7 @@ blueprint:
         object:
     gioi_han_mac_dinh:
       name: Số dòng mặc định
-      default: 5
+      default: 15
       selector:
         number:
           min: 1
