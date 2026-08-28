@@ -1,0 +1,75 @@
+blueprint:
+  name: "Tra cứu dữ liệu SQL (bảng tin tức)"
+  description: >
+    Tool cho Trợ lý thoại / AI Agent chạy truy vấn SELECT trên database Postgre
+    (mặc định bảng vnnew: title, link, isodate) và trả về ĐẦY ĐỦ nhiều dòng
+    kết quả, thay vì chỉ 1 dòng như sensor SQL thông thường. Dùng khi hỏi
+    "có tin tức gì mới", "tìm tin về X", "5 tin gần nhất"...
+  domain: script
+  input:
+    ten_bang:
+      name: Tên bảng
+      description: Bảng trong database sẽ truy vấn.
+      default: "vnnew"
+      selector:
+        text:
+    gioi_han_mac_dinh:
+      name: Số dòng mặc định
+      description: Số dòng trả về nếu người dùng không nêu rõ số lượng.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+
+fields:
+  tu_khoa:
+    name: Từ khóa (không bắt buộc)
+    description: Lọc theo tiêu đề chứa từ khóa này. Bỏ trống để lấy tin mới nhất.
+    required: false
+    selector:
+      text:
+  so_luong:
+    name: Số lượng (không bắt buộc)
+    description: Số dòng muốn lấy. Bỏ trống sẽ dùng giá trị mặc định.
+    required: false
+    selector:
+      number:
+        min: 1
+        max: 20
+        mode: box
+
+sequence:
+  - variables:
+      ten_bang: !input ten_bang
+      mac_dinh_so_luong: !input gioi_han_mac_dinh
+  - variables:
+      tu_khoa_loc: "{{ (tu_khoa | default('', true)) | trim | replace(\"'\", \"''\") }}"
+      so_dong: "{{ (so_luong | default(mac_dinh_so_luong, true)) | int }}"
+  - variables:
+      cau_query: >
+        {% if tu_khoa_loc %}
+        SELECT title, link, isodate FROM {{ ten_bang }} WHERE title ILIKE '%{{ tu_khoa_loc }}%' ORDER BY isodate DESC LIMIT {{ so_dong }};
+        {% else %}
+        SELECT title, link, isodate FROM {{ ten_bang }} ORDER BY isodate DESC LIMIT {{ so_dong }};
+        {% endif %}
+  - action: sql.query
+    data:
+      query: "{{ cau_query }}"
+    response_variable: sql_result
+  - variables:
+      ket_qua_text: >
+        {% set rows = sql_result.result if sql_result is mapping and 'result' in sql_result else sql_result %}
+        {% if rows | count == 0 %}
+        Không tìm thấy tin tức nào{% if tu_khoa_loc %} khớp từ khóa "{{ tu_khoa_loc }}"{% endif %}.
+        {% else %}
+        {% for r in rows %}
+        - {{ r.title }} ({{ r.isodate }}) - {{ r.link }}
+        {% endfor %}
+        {% endif %}
+  - variables:
+      ket_qua:
+        thong_tin: "{{ ket_qua_text }}"
+  - stop: ""
+    response_variable: ket_qua
