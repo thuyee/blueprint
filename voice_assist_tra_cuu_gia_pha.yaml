@@ -4,9 +4,6 @@ blueprint:
     Tool cho Trợ lý thoại / AI Agent tra cứu ĐẦY ĐỦ thông tin một thành viên
     trong gia phả từ tích hợp "Cây Gia Phả": giới tính, ngày sinh, ngày mất
     (giỗ), tuổi, thế hệ, con thứ, cha, mẹ, vợ/chồng, anh chị em ruột, ghi chú.
-    Expose script tạo từ blueprint này cho Assist thay vì expose trực tiếp
-    các sensor cá nhân, vì Assist chỉ đọc state + whitelist attribute hẹp,
-    không đọc được các attribute tùy biến (cha, mẹ, vợ, anh chị em...).
   domain: script
   input:
     include_ghi_chu:
@@ -40,26 +37,33 @@ fields:
 
 sequence:
   - variables:
-      tu_khoa: "{{ ten | trim }}"
+      tu_khoa: "{{ ten | trim | lower }}"
       bao_gom_ghi_chu: !input include_ghi_chu
       mau_khong_tim_thay: !input khong_tim_thay_message
       mau_nhieu_ket_qua: !input nhieu_ket_qua_message
       danh_sach: >
-        {{ states.sensor
-             | selectattr('attributes.integration', 'defined')
-             | selectattr('attributes.integration', 'eq', 'cay_gia_pha')
-             | selectattr('attributes.full_name', 'defined')
-             | selectattr('attributes.full_name', 'search', tu_khoa, ignorecase=true)
-             | list }}
+        {% set ns = namespace(found=[]) %}
+        {% for s in states.sensor %}
+          {% if s.attributes.get('integration') == 'cay_gia_pha' and s.attributes.get('full_name') %}
+            {% set fn = s.attributes.full_name | lower %}
+            {% if fn in tu_khoa or tu_khoa in fn %}
+              {% set ns.found = ns.found + [s.entity_id] %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.found }}
   - variables:
       ket_qua: >
         {% if danh_sach | count == 0 %}
-        {{ mau_khong_tim_thay.replace('{ten}', tu_khoa) }}
+        {{ mau_khong_tim_thay.replace('{ten}', ten) }}
         {% elif danh_sach | count > 1 %}
-        {% set ten_list = danh_sach | map(attribute='attributes.full_name') | join(', ') %}
-        {{ mau_nhieu_ket_qua.replace('{ten}', tu_khoa).replace('{danh_sach}', ten_list) }}
+        {% set ns2 = namespace(names=[]) %}
+        {% for e in danh_sach %}
+          {% set ns2.names = ns2.names + [state_attr(e, 'full_name')] %}
+        {% endfor %}
+        {{ mau_nhieu_ket_qua.replace('{ten}', ten).replace('{danh_sach}', ns2.names | join(', ')) }}
         {% else %}
-        {% set e = danh_sach[0].entity_id %}
+        {% set e = danh_sach[0] %}
         Họ tên: {{ state_attr(e, 'full_name') }}
         Giới tính: {{ state_attr(e, 'gender_name') }}
         Trạng thái: {{ state_attr(e, 'status') }}
