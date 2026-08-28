@@ -4,7 +4,11 @@ blueprint:
     Tool cho Trợ lý thoại / AI Agent tra cứu ĐẦY ĐỦ thông tin một thành viên
     trong gia phả từ tích hợp "Cây Gia Phả": giới tính, ngày sinh, ngày mất
     (giỗ), tuổi, thế hệ, con thứ, cha, mẹ, vợ/chồng, anh chị em ruột, ghi chú.
+    Expose script tạo từ blueprint này cho Assist thay vì expose trực tiếp
+    các sensor cá nhân, vì Assist chỉ đọc state + whitelist attribute hẹp,
+    không đọc được các attribute tùy biến (cha, mẹ, vợ, anh chị em...).
   domain: script
+  source_url: https://github.com/your-repo/tra_cuu_gia_pha.yaml
   input:
     include_ghi_chu:
       name: Đọc cả "Ghi chú"
@@ -53,7 +57,7 @@ sequence:
         {% endfor %}
         {{ ns.found }}
   - variables:
-      ket_qua: >
+      ket_qua_text: >
         {% if danh_sach | count == 0 %}
         {{ mau_khong_tim_thay.replace('{ten}', ten) }}
         {% elif danh_sach | count > 1 %}
@@ -78,5 +82,8 @@ sequence:
         Anh chị em ruột: {{ (state_attr(e, 'siblings') | join(', ')) if state_attr(e, 'siblings') else 'Không có' }}
         {% if bao_gom_ghi_chu and state_attr(e, 'details') %}Ghi chú: {{ state_attr(e, 'details') }}{% endif %}
         {% endif %}
+  - variables:
+      ket_qua:
+        thong_tin: "{{ ket_qua_text }}"
   - stop: ""
     response_variable: ket_qua
