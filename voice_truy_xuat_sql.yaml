@@ -15,7 +15,9 @@ blueprint:
         Dạng dict: key là tên bảng logic (LLM sẽ dùng tên này), value gồm
         'bang' (tên bảng thật trong DB), 'cot' (list cột SELECT),
         'cot_sap_xep' (cột dùng ORDER BY ... DESC),
-        'cot_tim_kiem' (cột dùng lọc theo từ khóa, dạng text, có thể bỏ trống),
+        'cot_tim_kiem' (cột dùng lọc theo từ khóa — có thể là 1 cột dạng text,
+        hoặc 1 LIST nhiều cột để tìm khớp bất kỳ cột nào, ví dụ
+        [ma_thiet_bi, ten_thiet_bi]; có thể bỏ trống),
         'db_url' (BẮT BUỘC - chuỗi kết nối Postgres, đúng cái đã dùng khi tạo
         SQL sensor cho bảng này, ví dụ postgresql://user:pass@core-postgresql:5432/homeassistant).
       default:
@@ -81,15 +83,27 @@ sequence:
         response_variable: ket_qua
   - variables:
       danh_sach_cot: "{{ cau_hinh.cot | join(', ') }}"
-      cot_sap_xep: "{{ cau_hinh.cot_sap_xep }}"
-      cot_tim_kiem: "{{ cau_hinh.get('cot_tim_kiem') }}"
+      cot_sap_xep: "{{ cau_hinh.get('cot_sap_xep') }}"
+      cot_tim_kiem_raw: "{{ cau_hinh.get('cot_tim_kiem') }}"
       ten_bang_that: "{{ cau_hinh.bang }}"
   - variables:
+      dieu_kien_tim_kiem: >
+        {% set cols = [cot_tim_kiem_raw] if cot_tim_kiem_raw is string else (cot_tim_kiem_raw or []) %}
+        {% set ns3 = namespace(parts=[]) %}
+        {% for c in cols %}
+          {% set ns3.parts = ns3.parts + [c ~ " ILIKE '%" ~ tu_khoa_loc ~ "%'"] %}
+        {% endfor %}
+        {{ '(' ~ (ns3.parts | join(' OR ')) ~ ')' if ns3.parts else '' }}
+  - variables:
       cau_query: >
-        {% if tu_khoa_loc and cot_tim_kiem %}
-        SELECT {{ danh_sach_cot }} FROM {{ ten_bang_that }} WHERE {{ cot_tim_kiem }} ILIKE '%{{ tu_khoa_loc }}%' ORDER BY {{ cot_sap_xep }} DESC LIMIT {{ so_dong }};
-        {% else %}
+        {% if cot_sap_xep and tu_khoa_loc and dieu_kien_tim_kiem %}
+        SELECT {{ danh_sach_cot }} FROM {{ ten_bang_that }} WHERE {{ dieu_kien_tim_kiem }} ORDER BY {{ cot_sap_xep }} DESC LIMIT {{ so_dong }};
+        {% elif cot_sap_xep %}
         SELECT {{ danh_sach_cot }} FROM {{ ten_bang_that }} ORDER BY {{ cot_sap_xep }} DESC LIMIT {{ so_dong }};
+        {% elif tu_khoa_loc and dieu_kien_tim_kiem %}
+        SELECT {{ danh_sach_cot }} FROM {{ ten_bang_that }} WHERE {{ dieu_kien_tim_kiem }} LIMIT {{ so_dong }};
+        {% else %}
+        SELECT {{ danh_sach_cot }} FROM {{ ten_bang_that }} LIMIT {{ so_dong }};
         {% endif %}
   - action: sql.query
     data:
@@ -103,8 +117,9 @@ sequence:
         Không tìm thấy dữ liệu nào trong bảng "{{ bang }}"{% if tu_khoa_loc %} khớp từ khóa "{{ tu_khoa_loc }}"{% endif %}.
         {% else %}
         {% for r in rows %}
-        {% for c in cau_hinh.cot %}{{ c }}: {{ r[c] }}{% if not loop.last %} | {% endif %}{% endfor %}
-
+        --- Tin {{ loop.index }} ---
+        {% for c in cau_hinh.cot %}{{ c }}: {{ r[c] }}
+        {% endfor %}
         {% endfor %}
         {% endif %}
   - variables:
