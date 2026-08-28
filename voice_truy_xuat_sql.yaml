@@ -15,13 +15,16 @@ blueprint:
         Dạng dict: key là tên bảng logic (LLM sẽ dùng tên này), value gồm
         'bang' (tên bảng thật trong DB), 'cot' (list cột SELECT),
         'cot_sap_xep' (cột dùng ORDER BY ... DESC),
-        'cot_tim_kiem' (cột dùng lọc theo từ khóa, dạng text, có thể bỏ trống).
+        'cot_tim_kiem' (cột dùng lọc theo từ khóa, dạng text, có thể bỏ trống),
+        'db_url' (BẮT BUỘC - chuỗi kết nối Postgres, đúng cái đã dùng khi tạo
+        SQL sensor cho bảng này, ví dụ postgresql://user:pass@core-postgresql:5432/homeassistant).
       default:
         tin_tuc:
           bang: vnnew
-          cot: [title, link, isodate]
+          cot: [title, contentsnippet, link, isodate]
           cot_sap_xep: isodate
           cot_tim_kiem: title
+          db_url: "postgresql://user:password@host:5432/database"
       selector:
         object:
     gioi_han_mac_dinh:
@@ -91,6 +94,7 @@ sequence:
   - action: sql.query
     data:
       query: "{{ cau_query }}"
+      db_url: "{{ cau_hinh.db_url }}"
     response_variable: sql_result
   - variables:
       ket_qua_text: >
