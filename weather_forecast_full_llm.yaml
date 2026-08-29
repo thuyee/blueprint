@@ -1,9 +1,10 @@
 blueprint:
   name: Get Home Weather Forecast
-  author: luuquangvu
+  author: luuquangvu (modified)
   source_url: https://github.com/luuquangvu/tutorials/blob/main/weather_forecast_full_llm.yaml
   description: |-
-    # Tool for requesting the weather forecast used for Voice Assistant
+    # Tool for requesting the weather forecast AND current conditions,
+    # used for Voice Assistant
 
     ### Blueprint setup
 
@@ -11,9 +12,25 @@ blueprint:
 
     * Set a weather entity to use for the forecasts
 
-    ### Optional
+    #### Optional but recommended
 
-    - Adjust the prompts for each field used in the script. The descriptions guide the LLM to provide the correct input.
+    * Set the extra sensors (humidity, pressure, wind, cloud, UV, PM2.5,
+      air quality category, RealFeel...) if your AccuWeather integration
+      exposes them as separate `sensor.*` entities. Leave any of them
+      empty if you don't have that sensor.
+
+    ### What changed vs the original
+
+    - The response now ALSO contains a `current` block with the live
+      readings (independent from the requested forecast period) plus a
+      ready-made `formatted_message` string in Vietnamese, styled like
+      a weather-bot reply (bold labels, emoji, and a short friendly
+      "Lưu ý" advice line). The LLM can relay `current.formatted_message`
+      almost verbatim when asked about the weather right now, instead of
+      needing a long prompt to build the formatting itself.
+    - The original `forecast` behavior (hourly/daily periods) is 100%
+      unchanged and still available under the `forecast` key of the
+      response, for future-looking questions ("ngày mai thế nào").
 
     ### Note
 
@@ -57,6 +74,74 @@ blueprint:
           selector:
             boolean: {}
           default: true
+        location_name:
+          name: Tên khu vực hiển thị (tùy chọn)
+          description: Nếu để trống sẽ tự lấy tên khu vực (area) của weather entity.
+          default: ""
+          selector:
+            text: {}
+    current_conditions_settings:
+      name: Sensor bổ sung cho thời tiết hiện tại (tùy chọn)
+      icon: mdi:weather-partly-rainy
+      description: >
+        Để trống sensor nào thì dòng đó sẽ tự động không xuất hiện trong
+        câu trả lời thời tiết hiện tại.
+      collapsed: true
+      input:
+        humidity_entity:
+          name: Độ ẩm (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        pressure_entity:
+          name: Áp suất (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        wind_speed_entity:
+          name: Tốc độ gió (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        wind_bearing_entity:
+          name: Hướng gió (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        cloud_entity:
+          name: Lượng mây % (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        realfeel_entity:
+          name: Nhiệt độ cảm nhận - RealFeel (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        uv_entity:
+          name: Chỉ số UV (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        pm25_entity:
+          name: PM2.5 (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        aqi_category_entity:
+          name: Mức chất lượng không khí - text (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
     prompt_settings:
       name: Prompt settings for the LLM
       icon: mdi:robot
@@ -103,9 +188,11 @@ blueprint:
             Start time (HH:MM:SS). Default 00:00:00 for daily, current time for hourly
 mode: parallel
 max_exceeded: silent
-description: Retrieves weather forecast for hourly or daily periods
+description: >-
+  Retrieves the current weather conditions (with a ready-made friendly
+  reply text including advice) and/or the hourly/daily weather forecast.
 variables:
-  version: 20260821
+  version: 20260829
 fields:
   time_period_type:
     name: Time Period Type
@@ -137,6 +224,16 @@ fields:
 sequence:
   - variables:
       weather_entity: !input weather_entity
+      location_name: !input location_name
+      humidity_entity: !input humidity_entity
+      pressure_entity: !input pressure_entity
+      wind_speed_entity: !input wind_speed_entity
+      wind_bearing_entity: !input wind_bearing_entity
+      cloud_entity: !input cloud_entity
+      realfeel_entity: !input realfeel_entity
+      uv_entity: !input uv_entity
+      pm25_entity: !input pm25_entity
+      aqi_category_entity: !input aqi_category_entity
       supported: >
         {% set sf = state_attr(weather_entity, 'supported_features') | int(0) %}
         {% set d = ['daily'] if sf | bitwise_and(1) else [] %}
@@ -266,6 +363,121 @@ sequence:
               end_of_period=end,
               **ns.combined
               ) }}"
-          response: "{{ averaged if calc_average else selected_data }}"
+          forecast_result: "{{ averaged if calc_average else selected_data }}"
+
+      # ============ PHẦN MỚI: THỜI TIẾT HIỆN TẠI + LỜI KHUYÊN ============
+      - variables:
+          cur_condition: "{{ states(weather_entity) }}"
+          cur_temp: "{{ state_attr(weather_entity, 'temperature') }}"
+          cur_humidity: >
+            {{ states(humidity_entity) if humidity_entity != '' and states(humidity_entity) not in ['unknown','unavailable']
+               else state_attr(weather_entity, 'humidity') }}
+          cur_pressure: >
+            {{ states(pressure_entity) if pressure_entity != '' and states(pressure_entity) not in ['unknown','unavailable']
+               else state_attr(weather_entity, 'pressure') }}
+          cur_wind_speed: >
+            {{ states(wind_speed_entity) if wind_speed_entity != '' and states(wind_speed_entity) not in ['unknown','unavailable']
+               else state_attr(weather_entity, 'wind_speed') }}
+          cur_wind_bearing: >
+            {{ states(wind_bearing_entity) if wind_bearing_entity != '' and states(wind_bearing_entity) not in ['unknown','unavailable']
+               else state_attr(weather_entity, 'wind_bearing') }}
+          cur_cloud: >
+            {{ states(cloud_entity) if cloud_entity != '' and states(cloud_entity) not in ['unknown','unavailable']
+               else state_attr(weather_entity, 'cloud_coverage') }}
+          cur_realfeel: "{{ states(realfeel_entity) if realfeel_entity != '' and states(realfeel_entity) not in ['unknown','unavailable'] else none }}"
+          cur_uv: "{{ states(uv_entity) if uv_entity != '' and states(uv_entity) not in ['unknown','unavailable'] else none }}"
+          cur_pm25: "{{ states(pm25_entity) if pm25_entity != '' and states(pm25_entity) not in ['unknown','unavailable'] else none }}"
+          cur_aqi_cat: "{{ states(aqi_category_entity) if aqi_category_entity != '' and states(aqi_category_entity) not in ['unknown','unavailable'] else none }}"
+          resolved_location: "{{ location_name if location_name != '' else (area_name(weather_entity) or weather_entity) }}"
+      - variables:
+          cur_wind_dir_text: >
+            {% if cur_wind_bearing not in [none, 'unknown', 'unavailable', ''] %}
+              {% set deg = cur_wind_bearing | float(0) %}
+              {% set dirs = ['Bắc','Bắc-Đông Bắc','Đông Bắc','Đông-Đông Bắc','Đông','Đông-Đông Nam','Đông Nam','Nam-Đông Nam','Nam','Nam-Tây Nam','Tây Nam','Tây-Tây Nam','Tây','Tây-Tây Bắc','Tây Bắc','Bắc-Tây Bắc'] %}
+              {{ dirs[ ((deg % 360) / 22.5) | round(0, 'floor') | int ] }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          cur_condition_vn: >
+            {{ {
+              'sunny': 'Nắng ☀️',
+              'clear-night': 'Đêm quang mây 🌙',
+              'partlycloudy': 'Ít mây ⛅',
+              'cloudy': 'Nhiều mây ☁️',
+              'rainy': 'Mưa 🌧️',
+              'pouring': 'Mưa to 🌧️',
+              'lightning': 'Dông ⛈️',
+              'lightning-rainy': 'Mưa dông ⛈️',
+              'snowy': 'Tuyết ❄️',
+              'snowy-rainy': 'Mưa tuyết 🌨️',
+              'fog': 'Sương mù 🌫️',
+              'hail': 'Mưa đá 🧊',
+              'windy': 'Gió mạnh 💨',
+              'windy-variant': 'Gió mạnh 💨',
+              'exceptional': 'Thời tiết bất thường ⚠️'
+            }.get(cur_condition, cur_condition) }}
+          cur_header_emoji: >
+            {{ {
+              'sunny': '☀️','clear-night': '🌙','partlycloudy': '⛅','cloudy': '☁️',
+              'rainy': '🌧️','pouring': '🌧️','lightning': '⛈️','lightning-rainy': '⛈️',
+              'snowy': '❄️','snowy-rainy': '🌨️','fog': '🌫️','hail': '🧊',
+              'windy': '💨','windy-variant': '💨','exceptional': '⚠️'
+            }.get(cur_condition, '🌤️') }}
+          cur_note: >
+            {% if cur_condition in ['rainy','pouring','lightning-rainy'] %}
+              Đang mưa, sếp ra đường mang ô, cẩn thận đường trơn ạ!
+            {% elif cur_condition == 'lightning' %}
+              Trời đang có dông, sếp hạn chế ra ngoài và tránh xa nơi trống trải ạ!
+            {% elif cur_uv is not none and cur_uv | float(0) >= 6 %}
+              Chỉ số UV khá cao, sếp nhớ chống nắng khi ra ngoài ạ!
+            {% elif cur_pm25 is not none and cur_pm25 | float(0) > 35 %}
+              Không khí hôm nay không tốt lắm, sếp cân nhắc đeo khẩu trang ạ!
+            {% else %}
+              Thời tiết khá ổn, sếp ra đường thoải mái ạ!
+            {% endif %}
+          cur_formatted_message: >
+            {{ cur_header_emoji }} **Thời tiết {{ resolved_location }} ({{ now().strftime('%d/%m/%Y') }} ~{{ now().strftime('%H:%M') }}):**
+
+
+            - Trời: {{ cur_condition_vn }}
+
+            - Nhiệt độ: {{ cur_temp }}°C{% if cur_realfeel is not none %} (cảm giác như {{ cur_realfeel }}°C){% endif %}
+
+            {% if cur_humidity is not none %}- Độ ẩm: {{ cur_humidity }}%
+            {% endif %}
+            {% if cur_cloud is not none %}- Mây: {{ cur_cloud }}% ({{ 'đầy mây' if cur_cloud|float(0) >= 80 else ('nhiều mây' if cur_cloud|float(0) >= 40 else 'quang đãng') }})
+            {% endif %}
+            {% if cur_wind_speed is not none %}- Gió: {{ cur_wind_speed }} km/h{% if cur_wind_dir_text is not none %}, hướng {{ cur_wind_dir_text }}{% endif %}
+            {% endif %}
+            {% if cur_pressure is not none %}- Áp suất: {{ cur_pressure }} hPa
+            {% endif %}
+            {% if cur_uv is not none %}- UV: {{ cur_uv }} ({{ 'thấp' if cur_uv|float(0) < 3 else ('trung bình' if cur_uv|float(0) < 6 else ('cao' if cur_uv|float(0) < 8 else 'rất cao')) }})
+            {% endif %}
+            {% if cur_aqi_cat is not none or cur_pm25 is not none %}- Chất lượng không khí: {% if cur_aqi_cat is not none %}{{ cur_aqi_cat }}{% endif %}{% if cur_pm25 is not none %} (PM2.5: {{ cur_pm25 }} µg/m³){% endif %}
+
+            {% endif %}
+
+            ⚠️ **Lưu ý:** {{ cur_note }}
+          current_result:
+            location: "{{ resolved_location }}"
+            condition: "{{ cur_condition }}"
+            temperature: "{{ cur_temp }}"
+            feels_like: "{{ cur_realfeel }}"
+            humidity_percent: "{{ cur_humidity }}"
+            cloud_coverage_percent: "{{ cur_cloud }}"
+            wind_speed: "{{ cur_wind_speed }}"
+            wind_direction: "{{ cur_wind_dir_text }}"
+            pressure_hpa: "{{ cur_pressure }}"
+            uv_index: "{{ cur_uv }}"
+            pm2_5: "{{ cur_pm25 }}"
+            air_quality_category: "{{ cur_aqi_cat }}"
+            advice: "{{ cur_note }}"
+            formatted_message: "{{ cur_formatted_message }}"
+      # ============ HẾT PHẦN MỚI ============
+
+      - variables:
+          response:
+            current: "{{ current_result }}"
+            forecast: "{{ forecast_result }}"
       - stop: ""
         response_variable: response
