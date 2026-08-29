@@ -1,0 +1,196 @@
+blueprint:
+  name: Get Weather Info
+  author: your-name
+  description: |-
+    # Tool for retrieving current weather information used for Voice Assistant
+
+    ## Blueprint Setup
+
+    ### Required
+
+    - Select the `weather.*` entity that represents the location you care about.
+    - Optionally select extra sensors (humidity, pressure, wind, UV, PM2.5, air
+      quality category, RealFeel...) if your integration exposes them as
+      separate `sensor.*` entities instead of `weather` attributes. Leave any
+      of them empty if you don't have that sensor — the field is simply
+      omitted from the response.
+    - This script does not call any AI itself: it only fetches and structures
+      the current weather data, then returns it via `response_variable`. It is
+      meant to be exposed to Assist and called as a tool by your Conversation
+      Agent (works with any LLM integration that supports script/tool calling
+      via Assist, not only Google Generative AI).
+
+    ### Note
+
+    - Provide a concise and precise description for the script so the LLM
+      recognizes it should be called whenever the user asks about the
+      weather.
+    - Make sure to expose the script to Assist after saving it.
+    - Do not alter the default script name.
+    - Once the script is created, click the three dots in the top right
+      corner, choose "Edit in YAML," and remove the `description: ...` line
+      to restore the default. This helps the LLM better understand the
+      script's purpose.
+  domain: script
+  homeassistant:
+    min_version: 2024.12.0
+  input:
+    entity_settings:
+      name: Cấu hình entity thời tiết
+      icon: mdi:weather-partly-rainy
+      description: Chọn entity weather chính và (tùy chọn) các sensor bổ sung.
+      input:
+        weather_entity:
+          name: Weather entity (bắt buộc)
+          selector:
+            entity:
+              domain: weather
+        location_name:
+          name: Tên khu vực hiển thị
+          default: ""
+          selector:
+            text: {}
+        humidity_entity:
+          name: Độ ẩm (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        pressure_entity:
+          name: Áp suất (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        wind_speed_entity:
+          name: Tốc độ gió (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        wind_bearing_entity:
+          name: Hướng gió (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        cloud_entity:
+          name: Lượng mây % (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        realfeel_entity:
+          name: Nhiệt độ cảm nhận - RealFeel (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        uv_entity:
+          name: Chỉ số UV (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        pm25_entity:
+          name: PM2.5 (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        pm10_entity:
+          name: PM10 (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        aqi_category_entity:
+          name: Mức chất lượng không khí - text (tùy chọn)
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+mode: parallel
+max_exceeded: silent
+description: >-
+  Retrieves the current weather, air quality, UV index and related conditions
+  for the configured location. Use this whenever the user asks about the
+  weather, temperature, humidity, wind, UV, or air quality.
+variables:
+  version: 20260829
+  weather_entity: !input weather_entity
+  location_name: !input location_name
+  humidity_entity: !input humidity_entity
+  pressure_entity: !input pressure_entity
+  wind_speed_entity: !input wind_speed_entity
+  wind_bearing_entity: !input wind_bearing_entity
+  cloud_entity: !input cloud_entity
+  realfeel_entity: !input realfeel_entity
+  uv_entity: !input uv_entity
+  pm25_entity: !input pm25_entity
+  pm10_entity: !input pm10_entity
+  aqi_category_entity: !input aqi_category_entity
+sequence:
+  - alias: Check if the weather entity is available
+    if:
+      - condition: template
+        value_template: "{{ states(weather_entity) in ['unknown', 'unavailable', 'none', ''] }}"
+    then:
+      - variables:
+          response:
+            error: The configured weather entity is unavailable.
+      - stop: The configured weather entity is unavailable.
+        response_variable: response
+  - variables:
+      condition_raw: "{{ states(weather_entity) }}"
+      resolved_location: "{{ location_name if location_name != '' else area_name(weather_entity) or weather_entity }}"
+      temperature: "{{ state_attr(weather_entity, 'temperature') }}"
+      temperature_unit: "{{ state_attr(weather_entity, 'temperature_unit') }}"
+      humidity: >
+        {{ states(humidity_entity) if humidity_entity != '' and states(humidity_entity) not in ['unknown','unavailable']
+           else state_attr(weather_entity, 'humidity') }}
+      pressure: >
+        {{ states(pressure_entity) if pressure_entity != '' and states(pressure_entity) not in ['unknown','unavailable']
+           else state_attr(weather_entity, 'pressure') }}
+      wind_speed: >
+        {{ states(wind_speed_entity) if wind_speed_entity != '' and states(wind_speed_entity) not in ['unknown','unavailable']
+           else state_attr(weather_entity, 'wind_speed') }}
+      wind_bearing: >
+        {{ states(wind_bearing_entity) if wind_bearing_entity != '' and states(wind_bearing_entity) not in ['unknown','unavailable']
+           else state_attr(weather_entity, 'wind_bearing') }}
+      cloud_coverage: >
+        {{ states(cloud_entity) if cloud_entity != '' and states(cloud_entity) not in ['unknown','unavailable']
+           else state_attr(weather_entity, 'cloud_coverage') }}
+      realfeel_temperature: "{{ states(realfeel_entity) if realfeel_entity != '' and states(realfeel_entity) not in ['unknown','unavailable'] else none }}"
+      uv_index: "{{ states(uv_entity) if uv_entity != '' and states(uv_entity) not in ['unknown','unavailable'] else none }}"
+      pm2_5: "{{ states(pm25_entity) if pm25_entity != '' and states(pm25_entity) not in ['unknown','unavailable'] else none }}"
+      pm10: "{{ states(pm10_entity) if pm10_entity != '' and states(pm10_entity) not in ['unknown','unavailable'] else none }}"
+      air_quality_category: "{{ states(aqi_category_entity) if aqi_category_entity != '' and states(aqi_category_entity) not in ['unknown','unavailable'] else none }}"
+  - variables:
+      wind_direction_text: >
+        {% if wind_bearing not in [none, 'unknown', 'unavailable', ''] %}
+          {% set deg = wind_bearing | float(0) %}
+          {% set dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'] %}
+          {{ dirs[ ((deg % 360) / 22.5) | round(0, 'floor') | int ] }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+      response:
+        location: "{{ resolved_location }}"
+        condition: "{{ condition_raw }}"
+        temperature: "{{ temperature }}"
+        temperature_unit: "{{ temperature_unit }}"
+        feels_like: "{{ realfeel_temperature }}"
+        humidity_percent: "{{ humidity }}"
+        cloud_coverage_percent: "{{ cloud_coverage }}"
+        wind_speed: "{{ wind_speed }}"
+        wind_bearing_degrees: "{{ wind_bearing }}"
+        wind_direction: "{{ wind_direction_text }}"
+        pressure_hpa: "{{ pressure }}"
+        uv_index: "{{ uv_index }}"
+        pm2_5: "{{ pm2_5 }}"
+        pm10: "{{ pm10 }}"
+        air_quality_category: "{{ air_quality_category }}"
+        retrieved_at: "{{ now().isoformat(timespec='seconds') }}"
+  - stop: ""
+    response_variable: response
