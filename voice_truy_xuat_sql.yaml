@@ -21,11 +21,11 @@ blueprint:
         'db_url' (BẮT BUỘC - chuỗi kết nối Postgres, đúng cái đã dùng khi tạo
         SQL sensor cho bảng này, ví dụ postgresql://user:pass@core-postgresql:5432/homeassistant).
       default:
-        tin_tuc:
-          bang: vnnew
-          cot: [title, contentsnippet, link, isodate]
-          cot_sap_xep: isodate
-          cot_tim_kiem: title
+        thiet_bi_dong_co:
+          bang: thong_so_dong_co
+          cot: [ma_thiet_bi, ten_thiet_bi, kieu_dong_co, cong_suat_kw, dong_dien_a, toc_do_rpm, vong_bi_truoc, vong_bi_sau, ghi_chu]
+          cot_sap_xep: ma_thiet_bi
+          cot_tim_kiem: [ma_thiet_bi, ten_thiet_bi]
           db_url: "postgresql://user:password@host:5432/database"
       selector:
         object:
@@ -42,9 +42,9 @@ fields:
   bang:
     name: Bảng logic cần tra cứu
     description: >
-      Tên bảng logic (key trong danh sách bảng đã định nghĩa), ví dụ "tin_tuc".
+      Tên bảng logic (key trong danh sách bảng đã định nghĩa), ví dụ "thiet_bi_dong_co".
     required: true
-    example: "tin_tuc"
+    example: "thiet_bi_dong_co"
     selector:
       text:
   tu_khoa:
