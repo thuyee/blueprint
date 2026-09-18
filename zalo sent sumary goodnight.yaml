@@ -1,5 +1,5 @@
 blueprint:
-  name: Good Night AI to Zalo + Mobile (Multi Device chuẩn)
+  name: Good Night AI to Zalo + Mobile + Telegram (Multi Device chuẩn)
   domain: automation
 
   input:
@@ -51,6 +51,23 @@ blueprint:
           step: 1000
       default: 0
 
+    # ===== TELEGRAM =====
+    enable_telegram:
+      name: Gửi thông báo qua Telegram
+      selector:
+        boolean:
+      default: true
+
+    telegram_service:
+      name: Telegram notify service
+      description: >
+        Service dùng để gửi Telegram. Mặc định notify.thuyeeqb_hassbot — service
+        đã cấu hình sẵn chat_id trong configuration.yaml. Đổi nếu bạn dùng bot
+        khác, ví dụ notify.telegram hoặc notify.send_message.
+      selector:
+        text:
+      default: notify.thuyeeqb_hassbot
+
     # ===== AI =====
     conversation_agent:
       selector:
@@ -82,6 +99,8 @@ action:
   - variables:
       prompt: !input prompt
       enable_zalo: !input enable_zalo
+      enable_telegram: !input enable_telegram
+      telegram_service: !input telegram_service
 
   # ===== AI =====
   - service: conversation.process
@@ -122,5 +141,16 @@ action:
               account_selection: !input zalo_account_selection
               type: !input zalo_type
               ttl: !input zalo_ttl
+
+  # ===== TELEGRAM =====
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ enable_telegram }}"
+        sequence:
+          - service: "{{ telegram_service }}"
+            data:
+              title: "🌙 Chúc ngủ ngon"
+              message: "{{ agent.response.speech.plain.speech }}"
 
 mode: single

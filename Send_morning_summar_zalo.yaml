@@ -1,5 +1,5 @@
 blueprint:
-  name: Send summary to Zalo + Speaker (DLNA Stable Full - Extended Weather/Sensors)
+  name: Send summary to Zalo + Speaker + Telegram (DLNA Stable Full - Extended Weather/Sensors)
   domain: automation
   author: smarthomeblack + GPT
   description: Morning summary with  weather/environmental sensors, calendar, todo, news, and speaker/Zalo notification.
@@ -43,6 +43,23 @@ blueprint:
           max: 86400000
           step: 1000
       default: 0
+
+    # ===== TELEGRAM =====
+    enable_telegram:
+      name: Enable Send to Telegram
+      selector:
+        boolean: {}
+      default: true
+
+    telegram_service:
+      name: Telegram notify service
+      description: >
+        Service dùng để gửi Telegram. Mặc định notify.thuyeeqb_hassbot — service
+        đã cấu hình sẵn chat_id trong configuration.yaml. Đổi nếu bạn dùng bot
+        khác, ví dụ notify.telegram hoặc notify.send_message.
+      selector:
+        text: {}
+      default: notify.thuyeeqb_hassbot
 
     # ===== DATA =====
     calendar_entity:
@@ -226,6 +243,8 @@ action:
       custom_footer: !input custom_footer
       speaker: !input speaker
       enable_zalo: !input enable_zalo
+      enable_telegram: !input enable_telegram
+      telegram_service: !input telegram_service
       enable_alarm: !input enable_alarm
       enable_tts: !input enable_tts
       alarm_url: !input alarm_url
@@ -381,6 +400,16 @@ action:
               account_selection: !input zalo_account_selection
               type: !input zalo_type
               ttl: !input zalo_ttl
+
+  # ===== SEND TELEGRAM =====
+  - choose:
+      - conditions:
+          - "{{ enable_telegram }}"
+        sequence:
+          - service: "{{ telegram_service }}"
+            data:
+              title: "☀️ Tóm tắt buổi sáng"
+              message: "{{ agent.response.speech.plain.speech }}"
 
   # ===== ALARM LOOP (DLNA STABLE) =====
   - choose:
