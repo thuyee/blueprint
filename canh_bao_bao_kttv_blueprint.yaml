@@ -1,8 +1,8 @@
 blueprint:
-  name: Cảnh báo bão KTTV -> Zalo/Mobile
+  name: Cảnh báo bão KTTV -> Zalo/Mobile/Telegram
   description: >
     Kiểm tra định kỳ bản tin bão mới từ Trung tâm Dự báo KTTV,
-    format bằng AI agent và gửi qua Zalo + thông báo điện thoại + các hành động tùy chọn thêm.
+    format bằng AI agent và gửi qua Zalo + Telegram + thông báo điện thoại + các hành động tùy chọn thêm.
     Yêu cầu: đã cài pyscript và copy file canh_bao_bao.py vào /config/pyscript/,
     đã tạo helper input_text.canh_bao_bao_last_title.
   domain: automation
@@ -64,6 +64,23 @@ blueprint:
       selector:
         text: {}
 
+    # ===== TELEGRAM =====
+    enable_telegram:
+      name: Gửi thông báo qua Telegram
+      selector:
+        boolean: {}
+      default: true
+
+    telegram_service:
+      name: Telegram notify service
+      description: >
+        Service dùng để gửi Telegram. Mặc định notify.thuyeeqb_hassbot — service
+        đã cấu hình sẵn chat_id trong configuration.yaml. Đổi nếu bạn dùng bot
+        khác, ví dụ notify.telegram hoặc notify.send_message.
+      selector:
+        text: {}
+      default: notify.thuyeeqb_hassbot
+
     additional_actions:
       name: Hành động bổ sung (Thêm Zalo 2, Zalo 3, Bật loa...)
       description: >
@@ -81,6 +98,10 @@ trigger:
 condition: []
 
 action:
+  - variables:
+      enable_telegram: !input enable_telegram
+      telegram_service: !input telegram_service
+
   - action: pyscript.tao_canh_bao_bao
     data:
       agent_id: !input agent_id
@@ -106,7 +127,18 @@ action:
           type: !input zalo_type
           message: "{{ ket_qua.message }}"
 
-      # 3. Chạy các Action thêm được người dùng cấu hình trên UI
+      # 3. Gửi Telegram (bật/tắt bằng input enable_telegram)
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ enable_telegram }}"
+            sequence:
+              - action: "{{ telegram_service }}"
+                data:
+                  title: "🌪️ Cảnh báo bão KTTV"
+                  message: "{{ ket_qua.message }}"
+
+      # 4. Chạy các Action thêm được người dùng cấu hình trên UI
       - choose: []
         default: !input additional_actions
 
