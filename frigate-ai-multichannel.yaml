@@ -1,6 +1,7 @@
 blueprint:
   name: Frigate AI Task - Thông báo đa kênh
   author: thuyee (gộp Frigate AI Notification của sam2kb + AI Task của AI Smart Camera)
+  source_url: https://raw.githubusercontent.com/thuyee/blueprint/main/frigate-ai-multichannel.yaml
   description: "🛰️ **Frigate phát hiện → AI Task phân tích ảnh/video → gửi thông báo kèm ảnh + mô tả AI.**\n\n1. Frigate phát hiện (person / dog / cat / face…), có thể lọc theo vùng (zone), điểm tin cậy, false-positive.\n2. Chụp 1-5 khung ảnh (và tùy chọn ghi 1 video ngắn) rồi đưa cho `ai_task.generate_data` phân tích - giống blueprint AI Smart Camera.\n3. 👤 Nếu Double Take/Frigate đã nhận diện khuôn mặt (sub_label: Ngọc Thụy, Mẹ…), thông tin này được đưa vào câu lệnh cho AI để AI dùng đúng tên, và luôn hiển thị trong thông báo.\n4. Gửi ảnh + mô tả của AI song song tới: 📱 Điện thoại Home Assistant · 💬 Zalo · ✈️ Telegram (nếu bật) · 🤖 Hermes · 🤖 Harness.\n5. Chống spam: cooldown, tự tắt 25 giây theo camera, nút Silence ngay trên thông báo điện thoại.\n"
   domain: automation
   homeassistant:
