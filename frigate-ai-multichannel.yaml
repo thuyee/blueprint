@@ -1,0 +1,1098 @@
+blueprint:
+  name: Frigate AI Task - Thông báo đa kênh
+  author: thuyee (gộp Frigate AI Notification của sam2kb + AI Task của AI Smart Camera)
+  description: "🛰️ **Frigate phát hiện → AI Task phân tích ảnh/video → gửi thông báo kèm ảnh + mô tả AI.**\n\n1. Frigate phát hiện (person / dog / cat / face…), có thể lọc theo vùng (zone), điểm tin cậy, false-positive.\n2. Chụp 1-5 khung ảnh (và tùy chọn ghi 1 video ngắn) rồi đưa cho `ai_task.generate_data` phân tích - giống blueprint AI Smart Camera.\n3. 👤 Nếu Double Take/Frigate đã nhận diện khuôn mặt (sub_label: Ngọc Thụy, Mẹ…), thông tin này được đưa vào câu lệnh cho AI để AI dùng đúng tên, và luôn hiển thị trong thông báo.\n4. Gửi ảnh + mô tả của AI song song tới: 📱 Điện thoại Home Assistant · 💬 Zalo · ✈️ Telegram (nếu bật) · 🤖 Hermes · 🤖 Harness.\n5. Chống spam: cooldown, tự tắt 25 giây theo camera, nút Silence ngay trên thông báo điện thoại.\n"
+  domain: automation
+  homeassistant:
+    min_version: 2026.3.0
+  input:
+    frigate_settings:
+      name: 🎥 Frigate
+      icon: mdi:cctv
+      description: Cấu hình nguồn sự kiện Frigate và bộ lọc cơ bản.
+      collapsed: false
+      input:
+        camera:
+          name: Camera Frigate
+          description: Chọn một hoặc nhiều camera Frigate cần theo dõi.
+          selector:
+            entity:
+              domain:
+              - camera
+              multiple: true
+              reorder: false
+        labels:
+          name: 🏷️ Nhãn cần thông báo
+          description: Các đối tượng Frigate sẽ thông báo. Bỏ trống = tất cả.
+          default:
+          - person
+          - dog
+          - cat
+          selector:
+            select:
+              multiple: true
+              options:
+              - person
+              - dog
+              - cat
+              - face
+              - car
+              - bicycle
+              - package
+              sort: false
+              custom_value: false
+        notify_device:
+          name: 📱 Điện thoại nhận thông báo
+          description: Chọn điện thoại đã cài ứng dụng Home Assistant Companion.
+          selector:
+            device:
+              integration: mobile_app
+              multiple: true
+        zones:
+          name: 🧭 Chỉ báo khi vào vùng (tùy chọn)
+          description: 'Danh sách tên zone của Frigate, cách nhau dấu phẩy. Hỗ trợ
+            wildcard * ?. Bỏ trống = mọi vùng.
+
+            '
+          default: ''
+          selector:
+            text:
+              multiline: false
+              multiple: false
+        zones_exclude:
+          name: 🚫 Bỏ qua vùng (tùy chọn)
+          description: Sự kiện nằm trong các vùng này sẽ KHÔNG thông báo.
+          default: ''
+          selector:
+            text:
+              multiline: false
+              multiple: false
+        min_score:
+          name: 🎯 Điểm tin cậy tối thiểu
+          default: 0.6
+          selector:
+            number:
+              min: 0.0
+              max: 1.0
+              step: 0.05
+              mode: slider
+        require_not_false_positive:
+          name: 🧹 Bỏ qua cảnh báo giả
+          default: true
+          selector:
+            boolean: {}
+        cooldown:
+          name: ⏳ Cooldown (chống spam)
+          description: Khoảng thời gian tối thiểu giữa 2 thông báo. Để 0 nếu không
+            cần.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
+              enable_day: true
+              enable_second: true
+        cooldown_timestamp:
+          name: ⏳ Helper cooldown (tùy chọn)
+          description: 'Tạo helper Date and time tên "Frigate Cooldown" rồi chọn vào
+            đây để cooldown hoạt động. Bỏ trống nếu không dùng cooldown.'
+          default: ''
+          selector:
+            entity:
+              domain:
+              - input_datetime
+              multiple: false
+              reorder: false
+    ai_task_settings:
+      name: 🤖 AI Task
+      icon: mdi:robot
+      description: Ảnh/video được chụp ngay khi Frigate phát hiện và đưa cho AI Task
+        phân tích.
+      collapsed: false
+      input:
+        ai_enabled:
+          name: ✅ Bật phân tích AI
+          default: true
+          selector:
+            boolean: {}
+        ai_task_entity:
+          name: 🤖 AI Task Entity
+          default: ai_task.google_ai_task
+          selector:
+            entity:
+              domain:
+              - ai_task
+              multiple: false
+              reorder: false
+        ai_task_output:
+          name: 📝 Kiểu đầu ra của AI
+          default: is_structured
+          selector:
+            select:
+              mode: dropdown
+              options:
+              - label: Structured Output (Gemini / Google AI Task)
+                value: is_structured
+              - label: JSON (NVIDIA, gemini-web-api…)
+                value: is_json
+              multiple: false
+              custom_value: false
+              sort: false
+        ai_task_media:
+          name: 🖼️🎞️ Đưa gì cho AI?
+          description: 'Lấy TRỰC TIẾP từ Frigate (snapshot + clip của sự kiện),
+            HA chỉ tải về đưa cho AI Task. Ảnh (nhanh) · Clip (AI hiểu hành động
+            tốt nhất) · Cả hai.
+
+            '
+          default: snapshot
+          selector:
+            select:
+              mode: dropdown
+              options:
+              - label: Ảnh snapshot
+                value: snapshot
+              - label: Video ngắn (clip ghi từ camera)
+                value: clip
+              - label: Cả ảnh và video
+                value: both
+              multiple: false
+              custom_value: false
+              sort: false
+        ai_require_person:
+          name: 🚶 Chỉ gửi khi AI thấy có người
+          description: Bật để lọc cảnh báo ảo - AI báo 0 người thì bỏ qua thông báo
+            đa kênh.
+          default: true
+          selector:
+            boolean: {}
+        ai_identity_aware:
+          name: 👤 Cho AI biết người đã nhận diện khuôn mặt
+          description: Khi Frigate/Double Take trả về sub_label (Ngọc Thụy, Mẹ…), thông
+            tin này được đưa vào câu lệnh để AI biết đó là người ĐÃ ĐƯỢC XÁC ĐỊNH và
+            dùng đúng tên.
+          default: true
+          selector:
+            boolean: {}
+        face_name_map:
+          name: 🧑 Map tên khuôn mặt (JSON, tùy chọn)
+          description: 'Đổi sub_label của Frigate thành tên thân thiện. Ví dụ: {"thuy":
+            "Ngọc Thụy", "me": "Mẹ"}. Bỏ trống để giữ nguyên.'
+          default: ''
+          selector:
+            text:
+              multiline: true
+              multiple: false
+    channel_settings:
+      name: 📣 Kênh gửi thông báo
+      icon: mdi:send-circle
+      description: Thông báo AI (ảnh + mô tả) được gửi song song tới các kênh đang
+        bật. Điện thoại đã chọn ở nhóm Frigate luôn nhận.
+      collapsed: false
+      input:
+        zalo_enable:
+          name: ✅ Zalo
+          default: false
+          selector:
+            boolean: {}
+        zalo_account:
+          name: 📞 Số điện thoại Zalo Bot
+          description: Số tài khoản Zalo Bot dùng để gửi, ví dụ +84868837123.
+          default: ''
+          selector:
+            text:
+              multiline: false
+              multiple: false
+        zalo_thread_id:
+          name: 💬 Zalo Thread ID
+          description: ID nhóm hoặc người dùng Zalo nhận thông báo.
+          default: ''
+          selector:
+            text:
+              multiline: false
+              multiple: false
+        telegram_enable:
+          name: ✅ Telegram
+          default: false
+          selector:
+            boolean: {}
+        notify_tele_target:
+          name: ✈️ Telegram notify entity
+          description: Chọn notify entity của telegram_bot để nhận thông báo.
+          default: []
+          selector:
+            entity:
+              filter:
+              - domain:
+                - notify
+                integration: telegram_bot
+              multiple: true
+              reorder: false
+        send_video:
+          name: 🎞️ Gửi kèm video clip
+          description: Gửi thêm clip sự kiện Frigate cho Zalo/Telegram và link clip
+            cho Hermes/Harness.
+          default: false
+          selector:
+            boolean: {}
+        hermes_enable:
+          name: ✅ Hermes bot
+          description: shell_command.hermes_notify / hermes_notify_photo (@hermesnt10_bot).
+          default: false
+          selector:
+            boolean: {}
+        harness_enable:
+          name: ✅ Harness bot
+          description: shell_command.harness_notify / harness_notify_photo (@harness_chat_bot).
+          default: false
+          selector:
+            boolean: {}
+    advanced_settings:
+      name: ⚙️ Nâng cao (tùy chọn)
+      icon: mdi:cog
+      collapsed: true
+      description: Chỉ cần khi camera HA không trùng tên camera Frigate, hoặc muốn gỡ
+        lỗi.
+      input:
+        camera_name_map:
+          name: 🗺️ Map tên camera (JSON)
+          description: 'Dùng khi entity camera của HA khác tên camera Frigate. Ví dụ:
+            {"camera.cam_san":"cam_fc367872"}
+
+            '
+          default: ''
+          selector:
+            text:
+              multiline: true
+              multiple: false
+        helper:
+          name: 🔒 Helper khoá AI (tùy chọn)
+          description: Input boolean dùng làm cờ "đang bận" khi nhiều camera gọi AI
+            cùng lúc.
+          default: ''
+          selector:
+            entity:
+              domain:
+              - input_boolean
+              multiple: false
+              reorder: false
+        debug:
+          name: 🐞 Ghi log gỡ lỗi
+          default: false
+          selector:
+            boolean: {}
+        ha_url:
+          name: 🏠 Địa chỉ Home Assistant
+          description: 'URL công khai của Home Assistant, dùng để tạo link ẢNH và CLIP
+            trong thông báo. Ví dụ: https://ngocthuyhome.com
+
+            '
+          default: https://ngocthuyhome.com
+          selector:
+            text:
+              multiline: false
+              multiple: false
+        frigate_url:
+          name: 🌐 Địa chỉ Frigate (để mở link)
+          description: 'URL công khai của Frigate, dùng cho nút "Mở Frigate" và "Xem
+            Live". Ví dụ: https://frigate.ngocthuyhome.com
+
+            '
+          default: https://frigate.ngocthuyhome.com
+          selector:
+            text:
+              multiline: false
+              multiple: false
+trigger_variables:
+  input_cameras: !input camera
+  camera_slugs: "{{ (input_cameras | default([], true) | list)\n   | map('replace','camera.','')\n
+    \  | map('lower')\n   | map('replace','-','_')\n   | list }}"
+trigger:
+- trigger: mqtt
+  id: frigate-event
+  topic: frigate/events
+  value_template: '{{ value_json[''type''] }}'
+  payload: new
+- trigger: event
+  event_type: mobile_app_notification_action
+  id: mobile-action
+condition: []
+action:
+- variables:
+    selected_cameras_input: !input camera
+    input_append: false
+    input_dashboard: ''
+    input_expand: false
+    input_provider: ''
+    input_ai_enabled: !input ai_enabled
+    input_ai_engine: '{% if input_ai_enabled %}ai_task{% else %}none{% endif %}'
+    input_ai_require_person: !input ai_require_person
+    input_ai_delay: 15
+    input_ai_task_entity: !input ai_task_entity
+    input_ai_task_output: !input ai_task_output
+    input_ai_task_media: !input ai_task_media
+    input_ai_task_instructions: 'Bạn là hệ thống thị giác máy tính giám sát camera an ninh. Hãy phân tích ảnh/video sự kiện, trả lời 100% tiếng Việt có dấu, ngắn gọn, đi thẳng vào trọng tâm, không rườm rà thưa gửi.'
+    input_ai_task_structure_description: 'Mô tả chi tiết chủ thể chuyển động: người lớn hay trẻ em, giới tính, trang phục và màu sắc, hành động đang làm, hướng di chuyển (đi vào / đi ra / di chuyển ngang). Bỏ qua cảnh nền và vật thể tĩnh.'
+    input_ai_task_json_instructions: 'Phân tích ảnh sự kiện camera an ninh. Chỉ trả về DUY NHẤT một dòng JSON thuần, không markdown, không giải thích: {"humans_detected":0,"humans_detected_description":""} - humans_detected: số nguyên, tổng số người thấy trong ảnh (0 nếu không có người). - humans_detected_description: mô tả ngắn bằng tiếng Việt có dấu (giới tính, người lớn/trẻ em, trang phục, màu sắc, hành động, đi vào hay đi ra); nếu không có người thì trả về chuỗi rỗng.'
+    input_conversation_agent: ''
+    input_frigate_retry_attempts: 4
+    input_frigate_retry_time:
+      hours: 0
+      minutes: 0
+      seconds: 30
+    input_max_frames: 3
+    input_notification_timeout: 10
+    input_ios_live_view: false
+    input_include_filename: false
+    input_generate_title: true
+    input_expose_images: false
+    input_model: ''
+    input_target_width: 1920
+    input_max_tokens: 100
+    input_temperature: 0.1
+    input_prompt: ''
+    input_sublabel: true
+    input_cooldown: !input cooldown
+    input_helper: !input helper
+    input_debug: !input debug
+    input_base_url: !input ha_url
+    input_local_url: ''
+    input_frigate_url: !input frigate_url
+    input_suppress_faces: ''
+    input_require_zones: false
+    input_camera_name_map: !input camera_name_map
+    input_cooldown_datetime: !input cooldown_timestamp
+    input_silence_table: ''
+    input_zalo_enable: !input zalo_enable
+    input_zalo_account: !input zalo_account
+    input_zalo_type: '1'
+    input_zalo_thread_id: !input zalo_thread_id
+    input_zalo_image: true
+    input_zalo_video: !input send_video
+    input_zalo_ttl: 0
+    input_snapshot_enable: true
+    input_snapshot_camera: ''
+    input_snapshot_dir: /media/snapshots
+    input_record_clip: "{{ (input_ai_task_media | default('snapshot', true) | string | trim | lower) in ['clip', 'both'] }}"
+    input_ai_identity_aware: !input ai_identity_aware
+    input_face_name_map: !input face_name_map
+    input_telegram_enable: !input telegram_enable
+    input_notify_tele_target: !input notify_tele_target
+    input_telegram_topic: ''
+    input_telegram_photo: true
+    input_telegram_video: !input send_video
+    input_hermes_enable: !input hermes_enable
+    input_harness_enable: !input harness_enable
+    input_hermes_photo: true
+    input_hermes_video_link: !input send_video
+    zalo_ready: "{{ input_zalo_enable\n   and (input_zalo_account | default('', true)
+      | trim) != ''\n   and (input_zalo_thread_id | default('', true) | trim) != ''
+      }}"
+    ai_engine_v: '{{ (input_ai_engine | default("ai_task", true) | string | trim) | lower }}'
+    ai_enabled: '{{ ai_engine_v not in ["none", "off", "disabled", ""] }}'
+    ai_task_ready: '{{ (input_ai_task_entity | default("", true) | string | trim) not in ["", "[]", "none", "None", "unknown", "unavailable"] }}'
+    ai_configured: '{{ ai_enabled and ai_task_ready }}'
+    payload: '{{ trigger.payload_json | default({}, true) if trigger is defined else
+      {} }}'
+    best_score_sent: 0.0
+    score_best_initial: '{% set a = payload.get(''after'', {}) or {} %} {{ (a.get(''top_score'')
+      if a.get(''top_score'') is not none else a.get(''score'', 0)) | float(0) }}'
+    auto_silence_secs: 25
+    silence_table_enabled: '{{ (input_silence_table | default('''', true) | string
+      | trim) | length > 0 }}'
+    silence_raw: '{{ states(input_silence_table) if input_silence_table else ''''
+      }}'
+    silence_raw_norm: '{{ (silence_raw | default('''', true) | trim) }}'
+    silence_is_empty: '{{ silence_raw_norm in ['''', ''unknown'', ''unavailable'']
+      }}'
+    ha_external_url: '{{ state_attr(''homeassistant'', ''external_url'') | default('''',
+      true) | trim }}'
+    ha_internal_url: '{{ state_attr(''homeassistant'', ''internal_url'') | default('''',
+      true) | trim }}'
+    input_labels: !input labels
+    labels: '{{ (input_labels | default([], true) | list) | map(''lower'') | list
+      }}'
+    camera_slugs_vars: "{% set cams = (selected_cameras_input | default([], true)
+      | list) %} {% set raw = (input_camera_name_map | default('', true) | string
+      | trim) %} {% set map0 = '{}' if raw in ['', 'unknown', 'unavailable'] else
+      raw %} {% set m = map0 | from_json %} {% set ns = namespace(names=[]) %} {%
+      for ent in cams %}\n  {% set ent_slug = (ent | replace('camera.','') | lower
+      | replace('-','_')) %}\n  {% set mapped = m.get(ent) if m is mapping else none
+      %}\n  {% if mapped is none %}{% set mapped = m.get(ent_slug) if m is mapping
+      else none %}{% endif %}\n  {% set mapped_clean = (mapped | default('', true)
+      | string | trim) %}\n  {% set mapped_slug = (mapped_clean | lower | replace('
+      ','_') | replace('-','_')) %}\n  {% set ns.names = ns.names + [ent_slug] %}\n
+      \ {% if mapped_clean not in ['', 'unknown', 'unavailable'] %}\n    {% set ns.names
+      = ns.names + [mapped_slug] %}\n  {% endif %}\n{% endfor %} {{ ns.names | unique
+      | list }}"
+    min_score: !input min_score
+    require_clip: false
+    require_not_false_positive: !input require_not_false_positive
+    event_type: '{{ payload.get(''type'') | default('''') }}'
+    event_camera_raw: "{{ (payload.get('after') or {}).get('camera')\n    or (payload.get('before')
+      or {}).get('camera')\n    or '' }}"
+    camera: '{{ (event_camera_raw | string) | lower | replace(''-'',''_'') }}'
+    input_zones: !input zones
+    input_zones_exclude: !input zones_exclude
+    input_zone_match_type: either
+    input_zone_logic: any
+    zones_filter: '{% set z = (input_zones | default('''', true) | string) %} {{ z.split('','')
+      | map(''trim'') | select(''ne'','''') | map(''lower'') | list }}'
+    zones_exclude_filter: '{% set z = (input_zones_exclude | default('''', true) |
+      string) %} {{ z.split('','') | map(''trim'') | select(''ne'','''') | map(''lower'')
+      | list }}'
+    zones_include_rx: "{% set ns = namespace(rx=[]) %} {% for p in (zones_filter |
+      default([], true)) %}\n  {% set raw = (p | lower | trim) %}\n  {% if raw %}\n
+      \   {% set escaped = raw | regex_replace('([.^$+{}()|\\\\[\\\\]\\\\\\\\])','\\\\\\\\\\\\1')
+      %}\n    {% set body = escaped | replace('*','.*') | replace('?','.') %}\n    {%
+      set has_wc = ('*' in raw) or ('?' in raw) or ('^' in raw) or ('$' in raw) %}\n
+      \   {% set body = ('.*' ~ body ~ '.*') if not has_wc else body %}\n    {% set
+      ns.rx = ns.rx + ['^' ~ body ~ '$'] %}\n  {% endif %}\n{% endfor %} {{ ns.rx
+      }}"
+    zones_exclude_rx: "{% set ns = namespace(rx=[]) %} {% for p in (zones_exclude_filter
+      | default([], true)) %}\n  {% set raw = (p | lower | trim) %}\n  {% if raw %}\n
+      \   {% set escaped = raw | regex_replace('([.^$+{}()|\\\\[\\\\]\\\\\\\\])','\\\\\\\\\\\\1')
+      %}\n    {% set body = escaped | replace('*','.*') | replace('?','.') %}\n    {%
+      set has_wc = ('*' in raw) or ('?' in raw) or ('^' in raw) or ('$' in raw) %}\n
+      \   {% set body = ('.*' ~ body ~ '.*') if not has_wc else body %}\n    {% set
+      ns.rx = ns.rx + ['^' ~ body ~ '$'] %}\n  {% endif %}\n{% endfor %} {{ ns.rx
+      }}"
+    event_zones_entered: '{{ (((payload.get(''after'') or {}).get(''entered_zones'',
+      []) or []) | list) | map(''lower'') | list }}'
+    event_zones_current: '{{ (((payload.get(''after'') or {}).get(''current_zones'',
+      []) or []) | list) | map(''lower'') | list }}'
+    event_zones_checked: "{% set t = (input_zone_match_type | lower) %} {% if t ==
+      'entered' %}\n  {{ event_zones_entered }}\n{% elif t == 'current' %}\n  {{ event_zones_current
+      }}\n{% else %}\n  {{ (event_zones_entered + event_zones_current) | unique |
+      list }}\n{% endif %}"
+    zones_known: '{{ (event_zones_checked | length) > 0 }}'
+    zone_match: "{% set Z = (event_zones_checked | default([], true)) | map('lower')
+      | list %} {% set zones_known = Z | length > 0 %} {% set logic = (input_zone_logic
+      | lower) %} {% set RXI = zones_include_rx %} {% set RXE = zones_exclude_rx %}
+      {% set exclude_hit = false %} {% for rx in RXE %}{% for z in Z %}{% if z | regex_match(rx,
+      ignorecase=true) %}{% set exclude_hit = true %}{% endif %}{% endfor %}{% endfor
+      %} {% if (zones_filter | length) == 0 %}\n  {% set include_ok = true %}\n{%
+      else %}\n  {% if not zones_known %}\n    {% set include_ok = false %}\n  {%
+      elif logic == 'all' %}\n    {% set include_ok = true %}\n    {% for rx in RXI
+      %}\n      {% set nsf = namespace(found=false) %}\n      {% for z in Z %}{% if
+      z | regex_match(rx, ignorecase=true) %}{% set nsf.found = true %}{% endif %}{%
+      endfor %}\n      {% if not nsf.found %}{% set include_ok = false %}{% endif
+      %}\n    {% endfor %}\n  {% else %}\n    {% set ns_any = namespace(hit=false)
+      %}\n    {% for rx in RXI %}{% for z in Z %}{% if z | regex_match(rx, ignorecase=true)
+      %}{% set ns_any.hit = true %}{% endif %}{% endfor %}{% endfor %}\n    {% set
+      include_ok = ns_any.hit %}\n  {% endif %}\n{% endif %} {{ include_ok and (not
+      exclude_hit) }}"
+    object: '{{ ((payload.get(''after'') or {}).get(''label'') | default('''')) }}'
+    label: '{{ object | title }}'
+    sub_label: '{{ (payload.get(''after'') or {}).get(''sub_label'') }}'
+    sub_label_text: '{% set s = (payload.get(''after'') or {}) %} {% set sl = s.get(''sub_label'') %} {% if sl is string %}{{ sl }}{% elif sl is sequence and (sl | length) > 0 %}{{ sl | first }}{% endif %}'
+    raw_device: !input notify_device
+    camera_name: '{% set n = camera | replace(''_'', '' '') | title %} {% if input_expand
+      %}{% set n = n | regex_replace(''(?i)\\bcam\\b'', ''Camera'') %}{% endif %}
+      {{ n ~ ('' Camera'' if input_append else '''') }}'
+    cooldown_td: '{{ input_cooldown }}'
+    cooldown_secs: "{% set d = input_cooldown %} {{ ((d.get('hours',0) | int(0) +
+      (d.get('days',0) | int(0)) * 24) * 3600)\n   + ((d.get('minutes',0) | int(0))
+      * 60)\n   + (d.get('seconds',0) | int(0)) }}"
+    last_notification_ts: '{{ state_attr(input_cooldown_datetime, ''timestamp'') |
+      default(0) }}'
+    now_ts: '{{ as_timestamp(now()) | int(0) }}'
+    timeout_secs: '{{ ((input_notification_timeout | float) * 3600) | int }}'
+    cooldown_active: '{% set ent = (input_cooldown_datetime | default('''', true) | string) %} {{ false if ent | length == 0 else ((now_ts - (last_notification_ts | int(0))) < (cooldown_secs | int(0))) }}'
+    base_url: '{% set configured = input_base_url | default('''', true) | trim %}
+      {% set fallback = ha_external_url or ha_internal_url %} {% set value = configured
+      if configured else fallback %} {{ (value or '''') | trim | regex_replace(''/+$'',
+      '''') }}'
+    local_url: '{% set configured = input_local_url | default('''', true) | trim %}
+      {% set fallback = ha_internal_url or ha_external_url %} {% set value = configured
+      if configured else fallback %} {{ (value or base_url) | trim | regex_replace(''/+$'',
+      '''') }}'
+    effective_base_url: '{{ (base_url or local_url or '''') | trim }}'
+    base_title: '{{ label }} detected'
+    base_message: '{{ label }} detected by {{ camera_name }}.'
+    title: '{{ base_title }}'
+    message: '{{ base_message }}'
+    fps: '{{ states(''sensor.'' + camera + ''_camera_fps'') | int(5) }}'
+    id: '{{ ((payload.get(''after'') or {}).get(''id'')) or ((payload.get(''before'')
+      or {}).get(''id'')) }}'
+    icon: mdi:{% if label == 'Person' %}account-outline{% elif label == 'Dog' %}dog{%
+      elif label == 'Cat' %}cat{% elif label == 'Car' %}car{% else %}home-assistant{%
+      endif %}
+    clip_path: /api/frigate/notifications/{{ id }}/{{ camera }}/clip.mp4
+    snapshot_path: /api/frigate/notifications/{{ id }}/snapshot.jpg
+    thumbnail_path: /api/frigate/notifications/{{ id }}/thumbnail.jpg
+    clip_url: '{{ (effective_base_url ~ clip_path) if effective_base_url else clip_path
+      }}'
+    clip_url_signed: '{{ clip_url }}?sign=true'
+    snapshot_url: '{{ (effective_base_url ~ snapshot_path) if effective_base_url else
+      snapshot_path }}'
+    thumbnail_url: '{{ (effective_base_url ~ thumbnail_path) if effective_base_url
+      else thumbnail_path }}'
+    thumbnail_android_url: '{{ thumbnail_url ~ ''?format=android'' }}'
+    video_ios: '{{ effective_base_url }}/api/frigate/notifications/{{ id }}/{{ camera
+      }}/master.m3u8'
+    live_deeplink: '{% set fu = (input_frigate_url | default('''', true) | string | trim) | regex_replace("/+$", "") %} {{ (fu ~ "/") if fu else ("entityId:camera." ~ camera) }}'
+    has_clip: '{{ (payload.get(''after'') or {}).get(''has_clip'', false) }}'
+    click_target_url: '{{ clip_url if has_clip else snapshot_url }}'
+    ios_click_target_url: '{% if input_ios_live_view %}{{ video_ios if has_clip else
+      snapshot_url }} {% else %}{{ click_target_url }}{% endif %}'
+    view_clip_uri_initial: '{% if input_ios_live_view %}{{ video_ios if has_clip else
+      clip_url }} {% else %}{{ clip_url }}{% endif %}'
+    frigate_review_url: "{% set configured = (input_frigate_url | default('', true)
+      | trim) %} {% if configured %}\n  {{ configured | regex_replace('/+$','') |
+      regex_replace('/review$','') }}/review?camera={{ camera }}&id={{ id }}\n{% else
+      %}\n  {% if base_url %}{{ base_url }}/api/frigate/review?camera={{ camera }}&id={{
+      id }}\n  {% elif local_url %}{{ local_url }}/api/frigate/review?camera={{ camera
+      }}&id={{ id }}\n  {% else %}/api/frigate/review?camera={{ camera }}&id={{ id
+      }}{% endif %}\n{% endif %}"
+    update_thumbnail: true
+    alert_once: true
+    ended: false
+    camera_silenced: "{% set raw0 = states(input_silence_table) %} {% set raw = (raw0 | default('', true) | trim | replace(\"'\", '\"')) %} {% set raw = '{}' if raw in ['', 'unknown', 'unavailable'] else raw %} {% set m = raw | from_json %} {% set until = (m.get(camera) | default(0)) | int(0) %} {{ false if not silence_table_enabled else (now_ts < until) }}"
+    tag_key: '{{ camera }}'
+    friendly_sub_label: "{% set sl = sub_label | default('', true) %} {% if sl is string %}{% set s = sl | trim %}{% elif sl is sequence %}{% set s = (sl | first | string | trim) if (sl | length) > 0 else '' %}{% else %}{% set s = '' %}{% endif %} {% set raw = (input_face_name_map | default('', true) | string | trim) %} {% set m = (('{}' if raw in ['', 'unknown', 'unavailable'] else raw) | from_json) %} {% set ns = namespace(name=s) %} {% for k, v in (m.items() if m is mapping else []) %} {% if (k | string | trim | lower) == (s | lower) %}{% set ns.name = v %}{% endif %} {% endfor %} {{ ns.name }}"
+    ai_identity_hint: "{% if input_ai_identity_aware and (friendly_sub_label | default('', true) | string | trim) != '' %}DANH TÍNH ĐÃ ĐƯỢC XÁC NHẬN: Hệ thống nhận diện khuôn mặt (Frigate + Double Take) đã xác định người trong ảnh/video này là {{ friendly_sub_label | string | trim }}. BẮT BUỘC: (1) Luôn gọi người này bằng tên {{ friendly_sub_label | string | trim }}, ví dụ: \"{{ friendly_sub_label | string | trim }} đang đi vào sân, tay cầm túi xách\". (2) TUYỆT ĐỐI KHÔNG mô tả chung chung kiểu \"một người đàn ông\", \"một nam thanh niên\", \"một phụ nữ\" thay cho tên. (3) Mọi hành động, trang phục, đồ vật phải gắn liền với {{ friendly_sub_label | string | trim }}.{% endif %}"
+    event_camera_entity: "{% set cams = (selected_cameras_input | default([], true) | list) %} {% set raw = (input_camera_name_map | default('', true) | string | trim) %} {% set m = (('{}' if raw in ['', 'unknown', 'unavailable'] else raw) | from_json) %} {% set ns = namespace(ent='') %} {% for ent in cams %} {% set ent_slug = (ent | replace('camera.', '') | lower | replace('-', '_')) %} {% set mapped = m.get(ent) if m is mapping else none %} {% if mapped is none %}{% set mapped = m.get(ent_slug) if m is mapping else none %}{% endif %} {% set mapped_slug = (mapped | default('', true) | string | trim | lower | replace(' ', '_') | replace('-', '_')) %} {% if ns.ent == '' and ((ent_slug == camera) or (mapped_slug == camera)) %}{% set ns.ent = ent %}{% endif %} {% endfor %} {% set ov = (input_snapshot_camera | default('', true) | string | trim) %} {{ ns.ent if ns.ent != '' else (ov if ov not in ['', 'unknown', 'unavailable', 'None', 'none'] else '') }}"
+    snapshot_dir_clean: '{{ (input_snapshot_dir | default("/media/snapshots", true) | string | trim) | regex_replace("/+$", "") }}'
+    snapshot_file_base: 'frigate_ai_{{ camera }}'
+    snapshot_media_base: '{{ snapshot_dir_clean }}/{{ snapshot_file_base }}'
+    snapshot_media_prefix: 'media-source://media_source/local/{{ snapshot_dir_clean | replace("/media/", "") }}/'
+    snapshot_media_file: '{{ snapshot_media_base }}_1.jpg'
+    record_local_path: '{{ snapshot_media_base }}_rec.mp4'
+    snapshot_public_url: '{{ (effective_base_url ~ snapshot_path) if effective_base_url else snapshot_path }}'
+    has_image: '{{ (snapshot_public_url | default("", true) | string | trim) != "" }}'
+    clip_local_url: '{{ (local_url ~ clip_path) if local_url else clip_path }}'
+    ai_task_media_effective: '{% set m = (input_ai_task_media | default("snapshot", true) | string | trim | lower) %} {{ "both" if (m == "both") else ("clip" if (m == "clip") else "snapshot") }}'
+    ai_task_attachments: "{% set ns = namespace(items=[]) %} {% if ai_task_media_effective in ['snapshot', 'both'] %}{% set ns.items = [{'media_content_id': snapshot_media_prefix ~ snapshot_file_base ~ '_1.jpg', 'media_content_type': 'image/jpeg'}] %}{% endif %} {% if ai_task_media_effective in ['clip', 'both'] %}{% set ns.items = ns.items + [{'media_content_id': snapshot_media_prefix ~ snapshot_file_base ~ '_rec.mp4', 'media_content_type': 'video/mp4'}] %}{% endif %} {{ ns.items }}"
+    telegram_ready: '{{ input_telegram_enable and (input_notify_tele_target | default([], true) | list | length > 0) }}'
+    zalo_channel_ready: '{{ input_zalo_enable and zalo_ready }}'
+    mobile_actions_list: "{% set ns = namespace(a=[]) %} {% set ns.a = ns.a + [{'action': 'URI', 'title': '🎬 Xem Clip', 'uri': (video_ios if input_ios_live_view else clip_url)}] %} {% set ns.a = ns.a + [{'action': 'URI', 'title': '🔎 Mở Frigate', 'uri': frigate_review_url}] %} {% set ns.a = ns.a + [{'action': 'URI', 'title': '📹 Xem Live', 'uri': live_deeplink}] %} {% set ns.a = ns.a + [{'action': 'SILENCE_' ~ this.entity_id ~ '__' ~ camera, 'title': '🔕 Tắt thông báo', 'behavior': 'textInput'}] %} {{ ns.a }}"
+- choose:
+  - conditions:
+    - condition: trigger
+      id: mobile-action
+    sequence:
+    - variables:
+        action_raw: '{{ trigger.event.data.action | default('''') }}'
+        silence_prefix: 'SILENCE_{{ this.entity_id }}__'
+        is_silence: '{{ action_raw.startswith(silence_prefix) }}'
+        silence_min: "{% if trigger.event.data.reply_text is defined and (trigger.event.data.reply_text | regex_match('^[0-9]+$')) %}{{ ([ (trigger.event.data.reply_text | int), 1 ] | max) | min(120) }}{% else %}5{% endif %}"
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ is_silence }}'
+        sequence:
+        - service: persistent_notification.create
+          data:
+            title: Frigate Notifications
+            message: Tạm dừng thông báo {{ silence_min }} phút.
+        - service: automation.turn_off
+          target:
+            entity_id: '{{ this.entity_id }}'
+          data:
+            stop_actions: false
+        - delay:
+            minutes: '{{ silence_min }}'
+        - service: automation.turn_on
+          target:
+            entity_id: '{{ this.entity_id }}'
+    - stop: Handled mobile action
+- condition: template
+  value_template: '{{ not labels|length or object in labels }}'
+- condition: template
+  value_template: '{{ (id | string) | length > 0 }}'
+- condition: template
+  value_template: '{{ camera in (camera_slugs_vars or []) }}'
+- choose:
+  - conditions:
+    - condition: template
+      value_template: '{{ input_debug }}'
+    sequence:
+    - service: logbook.log
+      data:
+        name: Frigate Notification
+        message: "DEBUG (initial decision):\n  event_type={{ event_type }} camera={{
+          camera }} zone_match={{ zone_match }}\n  cooldown_active={{ cooldown_active
+          }} camera_silenced={{ camera_silenced }}\n"
+- choose:
+  - conditions:
+    - condition: template
+      value_template: '{{ zone_match }}'
+    - condition: template
+      value_template: '{{ (not input_require_zones) or zones_known }}'
+    - condition: template
+      value_template: '{{ not cooldown_active }}'
+    - condition: template
+      value_template: '{{ not camera_silenced }}'
+    - condition: template
+      value_template: '{% set names = (input_suppress_faces | default('''', true)
+        | string | trim).split('','') | map(''trim'') | select(''ne'','''') | map(''lower'')
+        | list %} {{ names | length == 0 or (sub_label_text | lower | trim) not in
+        names }}
+
+        '
+    - condition: template
+      value_template: '{% set a = payload.get(''after'', {}) or {} %} {% set best
+        = (a.get(''top_score'') if a.get(''top_score'') is not none else a.get(''score'',
+        1)) | float(1) %} {% set score_ok = best >= (min_score | float(0)) %} {% set
+        clip_ok = (not require_clip) or a.get(''has_clip'', false) %} {% set fp_ok
+        = (not require_not_false_positive) or (a.get(''false_positive'') in [false,
+        None]) %} {{ score_ok and clip_ok and fp_ok }}
+
+        '
+    sequence:
+    - variables:
+        initial_sent: false
+    - repeat:
+        for_each: '{{ raw_device }}'
+        sequence:
+        - variables:
+            input_notify_device: '{{ ''notify.mobile_app_'' ~ (device_attr(repeat.item,
+              ''name'') | slugify) }}'
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: '{{ (input_dashboard | default('''', true) | string
+                | trim) != '''' }}'
+            sequence:
+            - service: '{{ input_notify_device }}'
+              data:
+                title: '{{ title }}'
+                message: '{{ message }}'
+                data:
+                  channel: '{{ camera_name }} Notifications'
+                  timeout: '{{ timeout_secs }}'
+                  tag: '{{ tag_key }}'
+                  group: '{{ camera_name }}'
+                  notification_icon: '{{ icon }}'
+                  data:
+                    ttl: '0'
+                    priority: high
+                  attachment:
+                    url: '{{ thumbnail_url ~ ''?t='' ~ now_ts }}'
+                  image: '{{ thumbnail_android_url ~ ''&t='' ~ now_ts }}'
+                  clickAction: '{{ ios_click_target_url }}'
+                  push:
+                    interruption-level: active
+                  alert_once: '{{ alert_once }}'
+                  actions:
+                  - action: URI
+                    title: View Clip
+                    uri: '{{ view_clip_uri_initial }}'
+                  - action: URI
+                    title: View Summary
+                    uri: '{{ input_dashboard }}'
+                  - action: URI
+                    title: Open Frigate
+                    uri: '{{ frigate_review_url }}'
+                  - action: URI
+                    title: View Live
+                    uri: '{{ live_deeplink }}'
+                  - action: SILENCE_{{ this.entity_id }}__{{ camera }}
+                    title: Silence
+                    behavior: textInput
+            - variables:
+                initial_sent: true
+          default:
+          - service: '{{ input_notify_device }}'
+            data:
+              title: '{{ title }}'
+              message: '{{ message }}'
+              data:
+                channel: '{{ camera_name }} Notifications'
+                timeout: '{{ timeout_secs }}'
+                tag: '{{ tag_key }}'
+                group: '{{ camera_name }}'
+                notification_icon: '{{ icon }}'
+                data:
+                  ttl: '0'
+                  priority: high
+                attachment:
+                  url: '{{ thumbnail_url }}'
+                image: '{{ thumbnail_android_url }}'
+                clickAction: '{{ ios_click_target_url }}'
+                push:
+                  interruption-level: active
+                alert_once: '{{ alert_once }}'
+                actions:
+                - action: URI
+                  title: View Clip
+                  uri: '{{ view_clip_uri_initial }}'
+                - action: URI
+                  title: Open Frigate
+                  uri: '{{ frigate_review_url }}'
+                - action: URI
+                  title: View Live
+                  uri: '{{ live_deeplink }}'
+                - action: SILENCE_{{ this.entity_id }}__{{ camera }}
+                  title: Silence
+                  behavior: textInput
+          - variables:
+              initial_sent: true
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ initial_sent and silence_table_enabled }}'
+        sequence:
+        - service: input_text.set_value
+          data:
+            entity_id: '{{ input_silence_table }}'
+            value: '{% set cur = (states(input_silence_table) | default(''{}'', true)
+              | from_json) %} {% set existing = (cur.get(camera) | default(0)) | int(0)
+              %} {% set until = [ existing, (as_timestamp(now()) | int(0)) + (auto_silence_secs
+              | int) ] | max %} {{ (cur | combine({ camera: until })) | tojson }}'
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: '{{ input_debug }}'
+            sequence:
+            - service: logbook.log
+              data:
+                name: Frigate Notification
+                message: 'DEBUG: auto per-camera silence set for {{ camera }} ({{
+                  auto_silence_secs }}s).'
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ input_debug and initial_sent }}'
+        sequence:
+        - service: logbook.log
+          data:
+            name: Frigate Notification
+            message: 'INFO (initial sent): camera={{ camera }} id={{ id }} clip_ready={{
+              has_clip }}
+
+              '
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ initial_sent }}'
+        sequence:
+        - variables:
+            best_score_sent: '{{ [ (best_score_sent | float(0)), (score_best_initial
+              | float(0)) ] | max }}'
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ (input_cooldown_datetime | default('''', true) | string)
+            | length > 0 }}'
+        sequence:
+        - service: input_datetime.set_datetime
+          data:
+            entity_id: '{{ input_cooldown_datetime }}'
+            date: '{{ now().strftime(''%Y-%m-%d'') }}'
+            time: '{{ now().strftime(''%H:%M:%S'') }}'
+- alias: Phân tích AI Task + gửi thông báo đa kênh
+  choose:
+  - conditions:
+    - condition: template
+      value_template: '{{ (zone_match | default(false)) or (zone_match_final | default(false)) }}'
+    - condition: template
+      value_template: '{{ not (camera_silenced_now | default(false)) }}'
+    - condition: template
+      value_template: '{{ not (cooldown_active | default(false)) }}'
+    sequence:
+    - variables:
+        ai_title: ''
+        ai_text: ''
+        ai_key_frame: ''
+        ai_person_count: -1
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ ai_configured }}'
+        sequence:
+        - delay:
+            seconds: '{{ input_ai_delay | int(0) }}'
+        - action: shell_command.frigate_download
+          continue_on_error: true
+          data:
+            url: '{{ snapshot_public_url }}'
+            dest: '{{ snapshot_media_base }}_1.jpg'
+        - if:
+          - condition: template
+            value_template: '{{ ai_task_media_effective in [''clip'', ''both''] }}'
+          then:
+          - action: shell_command.frigate_download
+            continue_on_error: true
+            data:
+              url: '{{ clip_url }}'
+              dest: '{{ record_local_path }}'
+        - delay:
+            seconds: 3
+        - variables:
+            ai_attachments_final: "{% set ns = namespace(items=[{'media_content_id': snapshot_media_prefix ~ snapshot_file_base ~ '_1.jpg', 'media_content_type': 'image/jpeg'}]) %} {% if (ai_task_media_effective in ['clip', 'both']) and ((final_has_clip | default(has_clip_now | default(has_clip))) | bool) %} {% set ns.items = ns.items + [{'media_content_id': snapshot_media_prefix ~ snapshot_file_base ~ '_rec.mp4', 'media_content_type': 'video/mp4'}] %} {% endif %} {{ ns.items }}"
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: '{{ (input_helper | default('''', true) | string) | length > 0 }}'
+            - condition: template
+              value_template: '{{ is_state(input_helper, ''on'') }}'
+            sequence:
+            - wait_template: '{{ (input_helper | default('''', true) | string) | length == 0 or is_state(input_helper, ''off'') }}'
+              timeout:
+                hours: 0
+                minutes: 3
+                seconds: 0
+              continue_on_timeout: false
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: '{{ (input_helper | default('''', true) | string) | length > 0 }}'
+            sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: '{{ input_helper }}'
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: '{{ input_ai_task_output == ''is_structured'' }}'
+            sequence:
+            - action: ai_task.generate_data
+              continue_on_error: true
+              data:
+                task_name: Phan tich su kien Frigate
+                entity_id: '{{ input_ai_task_entity }}'
+                instructions: "{{ input_ai_task_instructions }} {{ ai_identity_hint }}"
+                attachments: '{{ ai_attachments_final }}'
+                structure:
+                  humans_detected:
+                    description: Đếm số người trong ảnh/video
+                    required: true
+                    selector:
+                      number:
+                  humans_detected_description:
+                    description: "{{ input_ai_task_structure_description }} {{ ai_identity_hint }}"
+                    required: true
+                    selector:
+                      text:
+              response_variable: ai_task_report
+            - variables:
+                ai_task_data: '{{ ai_task_report.data | default({}, true) if (ai_task_report is defined and ai_task_report.data is defined) else {} }}'
+                ai_person_count: '{{ ai_task_data.get(''humans_detected'', -1) | int(-1) }}'
+                ai_text: '{{ ai_task_data.get(''humans_detected_description'', '''') | string | trim }}'
+        - if:
+          - condition: template
+            value_template: '{{ (ai_text | default('''', true) | string | trim) == '''' }}'
+          then:
+          - action: ai_task.generate_data
+            continue_on_error: true
+            data:
+              task_name: Phan tich su kien Frigate
+              entity_id: '{{ input_ai_task_entity }}'
+              instructions: "{{ input_ai_task_json_instructions }} {{ ai_identity_hint }}"
+              attachments: '{{ ai_attachments_final }}'
+            response_variable: ai_task_report_json
+          - variables:
+              ai_json_raw: '{{ ai_task_report_json.data | default('''', true) if ai_task_report_json is defined else '''' }}'
+              ai_json: '{{ (ai_json_raw | string | replace(''```json'', '''') | replace(''```'', '''') | trim) | from_json(default={}) }}'
+              ai_person_count: '{{ ai_json.get(''humans_detected'', -1) | int(-1) }}'
+              ai_text: '{{ ai_json.get(''humans_detected_description'', ai_json.get(''scene_summary'', '''')) | string | trim }}'
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: '{{ (input_helper | default('''', true) | string | trim) | length > 0 }}'
+            sequence:
+            - service: input_boolean.turn_off
+              target:
+                entity_id: '{{ input_helper }}'
+    - variables:
+        ai_person_known: '{{ (ai_person_count | int(-1)) >= 0 }}'
+        ai_has_person: '{{ true if (ai_person_count | int(-1)) < 0 else ((ai_person_count | int(0)) > 0) }}'
+        notify_allowed: '{{ (not input_ai_require_person) or ai_has_person }}'
+        final_title: "{% if input_generate_title and (ai_title | default('', true) | string | trim) != '' %}{{ ai_title | string | trim }}{% else %}{{ title }}{% endif %}"
+        final_message: '{% set t = ai_text | default('''', true) | string | trim %} {% set idl = friendly_sub_label | default('''', true) | string | trim %} {% if t != '''' %}{{ t }}{% else %}{{ message }}{% if idl != '''' %} (đã nhận diện: {{ idl }}){% endif %}{% endif %}'
+        final_image_ref: '{{ snapshot_public_url }}'
+        final_has_image: '{{ has_image }}'
+        final_identity_line: "{% set s = friendly_sub_label | default('', true) | string | trim %}{% if s != '' %}👤 Đã nhận diện: {{ s }}{% endif %}"
+        final_caption: "{{ final_title }}\n\n{{ final_message }}{% if (final_identity_line | string | trim) != '' %}\n\n{{ final_identity_line }}{% endif %}\n\n🎥 {{ clip_url }}"
+        clip_available: '{{ (final_has_clip | default(has_clip_now | default(has_clip))) | bool }}'
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: '{{ not notify_allowed }}'
+        sequence:
+        - service: logbook.log
+          data:
+            name: Frigate Notification
+            message: 'AI báo không có người (humans={{ ai_person_count }}) - bỏ qua
+              thông báo đa kênh.'
+    - alias: Gửi thông báo đa kênh
+      if:
+      - condition: template
+        value_template: '{{ notify_allowed }}'
+      then:
+      - parallel:
+        - alias: Zalo
+          if:
+          - condition: template
+            value_template: '{{ zalo_channel_ready }}'
+          then:
+          - if:
+            - condition: template
+              value_template: '{{ final_has_image }}'
+            then:
+            - action: zalo_bot.send_image
+              continue_on_error: true
+              data:
+                type: '1'
+                thread_id: !input zalo_thread_id
+                account_selection: !input zalo_account
+                image_path: '{{ snapshot_public_url }}'
+                message: '{{ final_caption }}'
+            else:
+            - action: zalo_bot.send_message
+              continue_on_error: true
+              data:
+                type: '1'
+                thread_id: !input zalo_thread_id
+                account_selection: !input zalo_account
+                message: '{{ final_caption }}'
+          - if:
+            - condition: template
+              value_template: '{{ input_zalo_video and clip_available }}'
+            then:
+            - action: zalo_bot.send_video
+              continue_on_error: true
+              data:
+                type: '1'
+                thread_id: !input zalo_thread_id
+                account_selection: !input zalo_account
+                message: '{{ final_title }}'
+                video_path_or_url: '{{ clip_local_url }}'
+                thumbnail_url: '{{ snapshot_public_url }}'
+        - alias: Telegram
+          if:
+          - condition: template
+            value_template: '{{ telegram_ready }}'
+          then:
+          - repeat:
+              for_each: '{{ input_notify_tele_target }}'
+              sequence:
+              - choose:
+                - conditions:
+                  - condition: template
+                    value_template: '{{ final_has_image }}'
+                  sequence:
+                  - action: telegram_bot.send_photo
+                    continue_on_error: true
+                    data:
+                      verify_ssl: false
+                      entity_id: '{{ repeat.item }}'
+                      file: '{{ snapshot_media_file }}'
+                      caption: '{{ final_caption }}'
+                default:
+                - action: telegram_bot.send_message
+                  continue_on_error: true
+                  data:
+                    entity_id: '{{ repeat.item }}'
+                    message: '{{ final_caption }}'
+              - if:
+                - condition: template
+                  value_template: '{{ input_telegram_video and clip_available }}'
+                then:
+                - action: telegram_bot.send_video
+                  continue_on_error: true
+                  data:
+                    verify_ssl: false
+                    entity_id: '{{ repeat.item }}'
+                    file: '{{ clip_url_signed }}'
+                    caption: '{{ final_title }}'
+        - alias: Hermes
+          if:
+          - condition: template
+            value_template: '{{ input_hermes_enable }}'
+          then:
+          - choose:
+            - conditions:
+              - condition: template
+                value_template: '{{ final_has_image }}'
+              sequence:
+              - action: shell_command.hermes_notify_photo
+                continue_on_error: true
+                data:
+                  photo: '{{ snapshot_media_file }}'
+                  title: '{{ camera_name }}'
+                  message: '{{ final_caption }}'
+            default:
+            - action: shell_command.hermes_notify
+              continue_on_error: true
+              data:
+                title: '{{ camera_name }}'
+                message: '{{ final_caption }}'
+          - if:
+            - condition: template
+              value_template: '{{ input_hermes_video_link and clip_available }}'
+            then:
+            - action: shell_command.hermes_notify
+              continue_on_error: true
+              data:
+                title: '{{ camera_name }} · Clip'
+                message: '{{ clip_url_signed }}'
+        - alias: Harness
+          if:
+          - condition: template
+            value_template: '{{ input_harness_enable }}'
+          then:
+          - choose:
+            - conditions:
+              - condition: template
+                value_template: '{{ final_has_image }}'
+              sequence:
+              - action: shell_command.harness_notify_photo
+                continue_on_error: true
+                data:
+                  photo: '{{ snapshot_media_file }}'
+                  title: '{{ camera_name }}'
+                  message: '{{ final_caption }}'
+            default:
+            - action: shell_command.harness_notify
+              continue_on_error: true
+              data:
+                title: '{{ camera_name }}'
+                message: '{{ final_caption }}'
+          - if:
+            - condition: template
+              value_template: '{{ input_hermes_video_link and clip_available }}'
+            then:
+            - action: shell_command.harness_notify
+              continue_on_error: true
+              data:
+                title: '{{ camera_name }} · Clip'
+                message: '{{ clip_url_signed }}'
+        - alias: Mobile App
+          if:
+          - condition: template
+            value_template: '{{ raw_device | default([], true) | list | length > 0 }}'
+          then:
+          - repeat:
+              for_each: '{{ raw_device }}'
+              sequence:
+              - variables:
+                  input_notify_device: '{{ ''notify.mobile_app_'' ~ (device_attr(repeat.item, ''name'') | slugify) }}'
+              - service: '{{ input_notify_device }}'
+                continue_on_error: true
+                data:
+                  title: '{{ final_title }}'
+                  message: '{{ final_message }}'
+                  data:
+                    channel: '{{ camera_name }} Notifications'
+                    timeout: '{{ timeout_secs }}'
+                    tag: '{{ tag_key }}'
+                    group: '{{ camera_name }}'
+                    notification_icon: '{{ icon }}'
+                    data:
+                      ttl: '0'
+                      priority: high
+                    attachment:
+                      url: '{{ snapshot_public_url }}'
+                    image: '{{ snapshot_public_url }}'
+                    clickAction: '{{ frigate_review_url }}'
+                    push:
+                      interruption-level: active
+                    alert_once: '{{ alert_once }}'
+                    actions: '{{ mobile_actions_list }}'
+- delay: '{{ cooldown_td }}'
+mode: parallel
+max: 25
